@@ -21,6 +21,7 @@ p: mahery
 My CommCare login:
 b.rice@princeton.edu
 usual 4M
+
 SARO - Madagascar - SPICES MALARIA
 
 https://www.commcarehq.org/a/madagascar-spices-malaria/login/
