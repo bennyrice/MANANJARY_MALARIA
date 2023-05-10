@@ -5,6 +5,7 @@ This repository contains de-identified data and R code used to analyze malaria d
 ### Benjamin Rice, PhD
 Department of Ecology and Evolutionary Biology
 Princeton University
+b.rice@princeton.edu
 
 # Data files include:
 
