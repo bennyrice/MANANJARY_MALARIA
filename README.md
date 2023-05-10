@@ -8,6 +8,14 @@ This repository contains de-identified data and R code used to analyze malaria d
 
 Data files include:
 
+# Head of household survey data
+## Head of household survey data
 ### Head of household survey data
+#### Head of household survey data
+##### Head of household survey data
+
+Head of household survey data
+*Head of household survey data*
+**Head of household survey data**
 
 etc
