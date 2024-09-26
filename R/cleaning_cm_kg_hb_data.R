@@ -49,7 +49,6 @@ col_renames_lookup <- c(T01_RDT.TIME = "T01_RDT_TIME",
                         T10_RDT.TIME = "T10_RDT_TIME", 
                         T11_RDT.TIME = "T11_RDT_TIME")
 
-
 df.N1N5 <- df.N1N5i %>%
   dplyr::select(any_of(cols_to_keep)) %>%
   rename(any_of(col_renames_lookup)) %>%
@@ -208,16 +207,86 @@ df.comp.RDT_TIME   <- df.joined %>% filter(RDT_TIME.x != RDT_TIME.y)
 df.comp.rdt_result <- df.joined %>% filter(rdt_result.x != rdt_result.y)
 df.comp.Hb         <- df.joined %>% filter(Hb.x != Hb.y)
 
-#Hb discrepancies = 9 [All resolved on 20240924]
+#Discrepancies = 1 --> 0 [Resolved on 20240925]
+df.comp.month <- df.comp.month %>% dplyr::select(site_code.x:time_point, month.x, day.x, month.y, day.y)
+#Discrepancies = 66 --> 56 --> 43 --> 0 [Resolved on 20240925]
+df.comp.day <- df.comp.day %>% dplyr::select(site_code.x:time_point, month.x, day.x, month.y, day.y) %>% arrange(time_point, site_code.x, unique_ind_id)
+
+#Discrepancies = 121
+df.comp.KG <- df.comp.KG %>% dplyr::select(site_code.x:time_point, KG.x, KG.y) %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 95
+df.comp.CM <- df.comp.CM %>% dplyr::select(site_code.x:time_point, CM.x, CM.y) %>% arrange(time_point, site_code.x, unique_ind_id)
+
+#Discrepancies = 16 --> 0 [Resolved on 20240925]
+df.comp.PB <- df.comp.PB %>% dplyr::select(site_code.x:time_point, PB.x, PB.y) %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 15 --> 0 [Resolved on 20240925]
+df.comp.PC <- df.comp.PC %>% dplyr::select(site_code.x:time_point, PC.x, PC.y) %>% arrange(time_point, site_code.x, unique_ind_id)
+
+#Discrepancies = 69
+df.comp.TEMP <- df.comp.TEMP %>% dplyr::select(site_code.x:time_point, TEMP.x, TEMP.y) %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 128 --> 0 [Resolved on 20240925]
+df.comp.RDT_TIME <- df.comp.RDT_TIME %>% dplyr::select(site_code.x:time_point, RDT_TIME.x, RDT_TIME.y) %>% arrange(time_point, site_code.x, unique_ind_id)
+
+
+#Discrepancies = 36 --> 21 --> 12 --> 0 [All resolved on 20240925]
+df.comp.rdt_result <- df.comp.rdt_result %>% dplyr::select(site_code.x:day.x, rdt_result.x, rdt_result.y)
+#Discrepancies = 9 --> 0 [All resolved on 20240924]
 df.comp.Hb <- df.comp.Hb %>% dplyr::select(site_code.x:time_point, Hb.x, Hb.y)
 
-#RDT result discrepancies = 36 --> 21 --> 12
-df.comp.rdt_result <- df.comp.rdt_result %>% dplyr::select(site_code.x:day.x, rdt_result.x, rdt_result.y)
+
+
+
+#Test for NA discrepancies : X is NA but Y has a value
+#Discrepancies = 4
+df.comp.NAx.month      <- df.joined %>% filter(is.na(month.x) & !is.na(month.y))           %>% dplyr::select(site_code.x:time_point, month.x, month.y)           %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 3
+df.comp.NAx.day        <- df.joined %>% filter(is.na(day.x) & !is.na(day.y))               %>% dplyr::select(site_code.x:time_point, day.x, day.y)               %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 6
+df.comp.NAx.KG         <- df.joined %>% filter(is.na(KG.x) & !is.na(KG.y))                 %>% dplyr::select(site_code.x:time_point, KG.x, KG.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 9
+df.comp.NAx.CM         <- df.joined %>% filter(is.na(CM.x) & !is.na(CM.y))                 %>% dplyr::select(site_code.x:time_point, CM.x, CM.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 12
+df.comp.NAx.PB         <- df.joined %>% filter(is.na(PB.x) & !is.na(PB.y))                 %>% dplyr::select(site_code.x:time_point, PB.x, PB.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 6
+df.comp.NAx.PC         <- df.joined %>% filter(is.na(PC.x) & !is.na(PC.y))                 %>% dplyr::select(site_code.x:time_point, PC.x, PC.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 2
+df.comp.NAx.TEMP       <- df.joined %>% filter(is.na(TEMP.x) & !is.na(TEMP.y))             %>% dplyr::select(site_code.x:time_point, TEMP.x, TEMP.y)             %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 4
+df.comp.NAx.RDT_TIME   <- df.joined %>% filter(is.na(RDT_TIME.x) & !is.na(RDT_TIME.y))     %>% dplyr::select(site_code.x:time_point, RDT_TIME.x, RDT_TIME.y)     %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 3
+df.comp.NAx.rdt_result <- df.joined %>% filter(is.na(rdt_result.x) & !is.na(rdt_result.y)) %>% dplyr::select(site_code.x:time_point, rdt_result.x, rdt_result.y) %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 3
+df.comp.NAx.Hb         <- df.joined %>% filter(is.na(Hb.x) & !is.na(Hb.y))                 %>% dplyr::select(site_code.x:time_point, Hb.x, Hb.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
+
+
+#Test for NA discrepancies : X has a value but Y is NA
+#Discrepancies = 0
+df.comp.NAy.month      <- df.joined %>% filter(!is.na(month.x) & is.na(month.y) & !is.na(month.y))           %>% dplyr::select(site_code.x:time_point, month.x, month.y)           %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 0
+df.comp.NAy.day        <- df.joined %>% filter(!is.na(day.x) & is.na(day.y) & !is.na(month.y))               %>% dplyr::select(site_code.x:time_point, day.x, day.y)               %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 0
+df.comp.NAy.KG         <- df.joined %>% filter(!is.na(KG.x) & is.na(KG.y) & !is.na(month.y))                 %>% dplyr::select(site_code.x:time_point, KG.x, KG.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 8
+df.comp.NAy.CM         <- df.joined %>% filter(!is.na(CM.x) & is.na(CM.y) & !is.na(month.y))                 %>% dplyr::select(site_code.x:time_point, CM.x, CM.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 14
+df.comp.NAy.PB         <- df.joined %>% filter(!is.na(PB.x) & is.na(PB.y) & !is.na(month.y))                 %>% dplyr::select(site_code.x:time_point, PB.x, PB.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 9
+df.comp.NAy.PC         <- df.joined %>% filter(!is.na(PC.x) & is.na(PC.y) & !is.na(month.y))                 %>% dplyr::select(site_code.x:time_point, PC.x, PC.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 0
+df.comp.NAy.TEMP       <- df.joined %>% filter(!is.na(TEMP.x) & is.na(TEMP.y) & !is.na(month.y))             %>% dplyr::select(site_code.x:time_point, TEMP.x, TEMP.y)             %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 0
+df.comp.NAy.RDT_TIME   <- df.joined %>% filter(!is.na(RDT_TIME.x) & is.na(RDT_TIME.y) & !is.na(month.y))     %>% dplyr::select(site_code.x:time_point, RDT_TIME.x, RDT_TIME.y)     %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 4
+df.comp.NAy.rdt_result <- df.joined %>% filter(!is.na(rdt_result.x) & is.na(rdt_result.y) & !is.na(month.y)) %>% dplyr::select(site_code.x:time_point, rdt_result.x, rdt_result.y) %>% arrange(time_point, site_code.x, unique_ind_id)
+#Discrepancies = 11
+df.comp.NAy.Hb         <- df.joined %>% filter(!is.na(Hb.x) & is.na(Hb.y) & !is.na(month.y))                 %>% dplyr::select(site_code.x:time_point, Hb.x, Hb.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
+
+
 
 
 ###***Workflow: go through and check against data scan, correcting the QC or primary data sheet on google sheets
 ###*Note that QC only done on N1, N2, N3 and 25% of time points for other sites - probably need to do QC on the rest of the sites
-###*Finish during peer review
+###*Finish during peer review?
 
 
 
@@ -231,7 +300,12 @@ df.comp.rdt_result <- df.comp.rdt_result %>% dplyr::select(site_code.x:day.x, rd
 # RDT result is not valid (pan, pf, panpf, neg)
 # RDT result with no sample date recorded or sample date but no result
 
-
+#Checking for duplicate unique_ind_ids
+dfS6i[duplicated(dfS6i$unique_ind_id), ]
+dfS5i[duplicated(dfS5i$unique_ind_id), ]
+dfS3i[duplicated(dfS3i$unique_ind_id), ]
+dfS2S1i[duplicated(dfS2S1i$unique_ind_id), ]
+dfN1N5i[duplicated(dfN1N5i$unique_ind_id), ]
 
 ##############################################################################################################################
 # DATA CLEANING 2: Checking for data recording errors
@@ -311,12 +385,7 @@ dfS3i   <- dfS3i   %>% filter(!(is.na(unique_ind_id)))
 dfS2S1i <- dfS2S1i %>% filter(!(is.na(unique_ind_id)))
 dfN1N5i <- dfN1N5i %>% filter(!(is.na(unique_ind_id)))
 
-#Checking for duplicate unique_ind_ids
-dfS6i[duplicated(dfS6i$unique_ind_id), ]
-dfS5i[duplicated(dfS5i$unique_ind_id), ]
-dfS3i[duplicated(dfS3i$unique_ind_id), ]
-dfS2S1i[duplicated(dfS2S1i$unique_ind_id), ]
-dfN1N5i[duplicated(dfN1N5i$unique_ind_id), ]
+
 
 ####################################################################################################################################
 
