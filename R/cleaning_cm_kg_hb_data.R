@@ -1,6 +1,7 @@
 library(tidyverse)
 library(patchwork)
 library(googlesheets4)
+library(mgcv)
 
 
 ##############################################################################################################################
@@ -70,6 +71,10 @@ df.S6 <- df.S6i %>%
   rename(any_of(col_renames_lookup)) %>%
   pivot_longer(!unique_ind_id, names_sep = "_", names_to = c("time_point", "variable"))
 
+##############################################################################################################################
+# First data cleaning steps
+##############################################################################################################################
+
 #Binding together and cleaning up columns
 df.primary <- rbind(df.N1N5, df.S1S2, df.S3, df.S5, df.S6) %>%
   mutate(variable = case_when(
@@ -86,9 +91,30 @@ df.primary <- rbind(df.N1N5, df.S1S2, df.S3, df.S5, df.S6) %>%
   mutate(across(c(KG:TEMP, Hb), as.numeric)) %>%
   mutate(across(c(day, RDT_TIME), as.integer))
 
+#Checking for duplicate unique_ind_ids
+df.primary %>% group_by(unique_ind_id, time_point) %>%
+  summarize(n = n()) %>% filter(n > 1) 
+
+df.primary <- df.primary %>%
+  #Cleaning up data frame: site_code as a factor
+  mutate(site_code = factor(site_code)) %>%
+  #Dealing with invalid RDTs
+  mutate(rdt_result.coded = case_when(
+    rdt_result == "pan"   ~ 1,
+    rdt_result == "pf"    ~ 1,
+    rdt_result == "panpf" ~ 1,
+    rdt_result == "neg"   ~ 0,
+    rdt_result == ""      ~ NA_integer_,
+    is.na(rdt_result)     ~ NA_integer_
+    ))
+
 ##############################################################################################################################
 # DATA CLEANING 1: Checking for errors in data entry
 ##############################################################################################################################
+
+###*Note that QC duplicates done on N1, N2, N3 and approx. 25% of time points for other sites
+###*Consider doing duplicates and triplicates?
+
 
 #Read in quality control check data
 #Data is piece-wise by site and time point in File 1; piecewise by site in File 2
@@ -184,271 +210,317 @@ f.qc.file_reader1 <- function(url, v.sheet.list){
 
 ########################################################################################################################
 #Join primary data and quality control check data
-url.qc.read <- "https://docs.google.com/spreadsheets/d/18luemce_L9fVTUmWPcZGsfyAbpLXKm_xl5rTpQie2oQ/edit?gid=1889196570#gid=1889196570"
-
-df.qc.read <- read_sheet(url.qc.read)
-
-df.qc.read <- df.qc.read %>%
-  mutate(across(month:Hb, ~ ifelse(. == "NA", NA, .))) %>%
-  mutate(across(c(KG:TEMP, Hb), as.numeric)) %>%
-  mutate(across(c(day, RDT_TIME), as.integer))
-
-df.joined <- full_join(df.primary, df.qc.read, by = join_by(unique_ind_id, time_point))
-
-#Compare for differences between primary data entry and quality control check data
-df.comp.month      <- df.joined %>% filter(month.x != month.y)
-df.comp.day        <- df.joined %>% filter(day.x != day.y)
-df.comp.KG         <- df.joined %>% filter(KG.x != KG.y)
-df.comp.CM         <- df.joined %>% filter(CM.x != CM.y)
-df.comp.PB         <- df.joined %>% filter(PB.x != PB.y)
-df.comp.PC         <- df.joined %>% filter(PC.x != PC.y)
-df.comp.TEMP       <- df.joined %>% filter(TEMP.x != TEMP.y)
-df.comp.RDT_TIME   <- df.joined %>% filter(RDT_TIME.x != RDT_TIME.y)
-df.comp.rdt_result <- df.joined %>% filter(rdt_result.x != rdt_result.y)
-df.comp.Hb         <- df.joined %>% filter(Hb.x != Hb.y)
-
-#Discrepancies = 1 --> 0 [Resolved on 20240925]
-df.comp.month <- df.comp.month %>% dplyr::select(site_code.x:time_point, month.x, day.x, month.y, day.y)
-#Discrepancies = 66 --> 56 --> 43 --> 0 [Resolved on 20240925]
-df.comp.day <- df.comp.day %>% dplyr::select(site_code.x:time_point, month.x, day.x, month.y, day.y) %>% arrange(time_point, site_code.x, unique_ind_id)
-
-#Discrepancies = 121
-df.comp.KG <- df.comp.KG %>% dplyr::select(site_code.x:time_point, KG.x, KG.y) %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 95
-df.comp.CM <- df.comp.CM %>% dplyr::select(site_code.x:time_point, CM.x, CM.y) %>% arrange(time_point, site_code.x, unique_ind_id)
-
-#Discrepancies = 16 --> 0 [Resolved on 20240925]
-df.comp.PB <- df.comp.PB %>% dplyr::select(site_code.x:time_point, PB.x, PB.y) %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 15 --> 0 [Resolved on 20240925]
-df.comp.PC <- df.comp.PC %>% dplyr::select(site_code.x:time_point, PC.x, PC.y) %>% arrange(time_point, site_code.x, unique_ind_id)
-
-#Discrepancies = 69
-df.comp.TEMP <- df.comp.TEMP %>% dplyr::select(site_code.x:time_point, TEMP.x, TEMP.y) %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 128 --> 0 [Resolved on 20240925]
-df.comp.RDT_TIME <- df.comp.RDT_TIME %>% dplyr::select(site_code.x:time_point, RDT_TIME.x, RDT_TIME.y) %>% arrange(time_point, site_code.x, unique_ind_id)
-
-
-#Discrepancies = 36 --> 21 --> 12 --> 0 [All resolved on 20240925]
-df.comp.rdt_result <- df.comp.rdt_result %>% dplyr::select(site_code.x:day.x, rdt_result.x, rdt_result.y)
-#Discrepancies = 9 --> 0 [All resolved on 20240924]
-df.comp.Hb <- df.comp.Hb %>% dplyr::select(site_code.x:time_point, Hb.x, Hb.y)
-
-
-
-
-#Test for NA discrepancies : X is NA but Y has a value
-#Discrepancies = 4
-df.comp.NAx.month      <- df.joined %>% filter(is.na(month.x) & !is.na(month.y))           %>% dplyr::select(site_code.x:time_point, month.x, month.y)           %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 3
-df.comp.NAx.day        <- df.joined %>% filter(is.na(day.x) & !is.na(day.y))               %>% dplyr::select(site_code.x:time_point, day.x, day.y)               %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 6
-df.comp.NAx.KG         <- df.joined %>% filter(is.na(KG.x) & !is.na(KG.y))                 %>% dplyr::select(site_code.x:time_point, KG.x, KG.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 9
-df.comp.NAx.CM         <- df.joined %>% filter(is.na(CM.x) & !is.na(CM.y))                 %>% dplyr::select(site_code.x:time_point, CM.x, CM.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 12
-df.comp.NAx.PB         <- df.joined %>% filter(is.na(PB.x) & !is.na(PB.y))                 %>% dplyr::select(site_code.x:time_point, PB.x, PB.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 6
-df.comp.NAx.PC         <- df.joined %>% filter(is.na(PC.x) & !is.na(PC.y))                 %>% dplyr::select(site_code.x:time_point, PC.x, PC.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 2
-df.comp.NAx.TEMP       <- df.joined %>% filter(is.na(TEMP.x) & !is.na(TEMP.y))             %>% dplyr::select(site_code.x:time_point, TEMP.x, TEMP.y)             %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 4
-df.comp.NAx.RDT_TIME   <- df.joined %>% filter(is.na(RDT_TIME.x) & !is.na(RDT_TIME.y))     %>% dplyr::select(site_code.x:time_point, RDT_TIME.x, RDT_TIME.y)     %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 3
-df.comp.NAx.rdt_result <- df.joined %>% filter(is.na(rdt_result.x) & !is.na(rdt_result.y)) %>% dplyr::select(site_code.x:time_point, rdt_result.x, rdt_result.y) %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 3
-df.comp.NAx.Hb         <- df.joined %>% filter(is.na(Hb.x) & !is.na(Hb.y))                 %>% dplyr::select(site_code.x:time_point, Hb.x, Hb.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
-
-
-#Test for NA discrepancies : X has a value but Y is NA
-#Discrepancies = 0
-df.comp.NAy.month      <- df.joined %>% filter(!is.na(month.x) & is.na(month.y) & !is.na(month.y))           %>% dplyr::select(site_code.x:time_point, month.x, month.y)           %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 0
-df.comp.NAy.day        <- df.joined %>% filter(!is.na(day.x) & is.na(day.y) & !is.na(month.y))               %>% dplyr::select(site_code.x:time_point, day.x, day.y)               %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 0
-df.comp.NAy.KG         <- df.joined %>% filter(!is.na(KG.x) & is.na(KG.y) & !is.na(month.y))                 %>% dplyr::select(site_code.x:time_point, KG.x, KG.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 8
-df.comp.NAy.CM         <- df.joined %>% filter(!is.na(CM.x) & is.na(CM.y) & !is.na(month.y))                 %>% dplyr::select(site_code.x:time_point, CM.x, CM.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 14
-df.comp.NAy.PB         <- df.joined %>% filter(!is.na(PB.x) & is.na(PB.y) & !is.na(month.y))                 %>% dplyr::select(site_code.x:time_point, PB.x, PB.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 9
-df.comp.NAy.PC         <- df.joined %>% filter(!is.na(PC.x) & is.na(PC.y) & !is.na(month.y))                 %>% dplyr::select(site_code.x:time_point, PC.x, PC.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 0
-df.comp.NAy.TEMP       <- df.joined %>% filter(!is.na(TEMP.x) & is.na(TEMP.y) & !is.na(month.y))             %>% dplyr::select(site_code.x:time_point, TEMP.x, TEMP.y)             %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 0
-df.comp.NAy.RDT_TIME   <- df.joined %>% filter(!is.na(RDT_TIME.x) & is.na(RDT_TIME.y) & !is.na(month.y))     %>% dplyr::select(site_code.x:time_point, RDT_TIME.x, RDT_TIME.y)     %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 4
-df.comp.NAy.rdt_result <- df.joined %>% filter(!is.na(rdt_result.x) & is.na(rdt_result.y) & !is.na(month.y)) %>% dplyr::select(site_code.x:time_point, rdt_result.x, rdt_result.y) %>% arrange(time_point, site_code.x, unique_ind_id)
-#Discrepancies = 11
-df.comp.NAy.Hb         <- df.joined %>% filter(!is.na(Hb.x) & is.na(Hb.y) & !is.na(month.y))                 %>% dplyr::select(site_code.x:time_point, Hb.x, Hb.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
-
-
-
-
-###***Workflow: go through and check against data scan, correcting the QC or primary data sheet on google sheets
-###*Note that QC only done on N1, N2, N3 and 25% of time points for other sites - probably need to do QC on the rest of the sites
-###*Finish during peer review?
-
-
+# url.qc.read <- "https://docs.google.com/spreadsheets/d/18luemce_L9fVTUmWPcZGsfyAbpLXKm_xl5rTpQie2oQ/edit?gid=1889196570#gid=1889196570"
+# 
+# df.qc.read <- read_sheet(url.qc.read)
+# 
+# df.qc.read <- df.qc.read %>%
+#   mutate(across(month:Hb, ~ ifelse(. == "NA", NA, .))) %>%
+#   mutate(across(c(KG:TEMP, Hb), as.numeric)) %>%
+#   mutate(across(c(day, RDT_TIME), as.integer))
+# 
+# df.joined <- full_join(df.primary, df.qc.read, by = join_by(unique_ind_id, time_point))
+# 
+# ########################################################################################################################
+# #Compare for differences between primary data entry and quality control check data
+# df.comp.month      <- df.joined %>% filter(month.x != month.y)
+# df.comp.day        <- df.joined %>% filter(day.x != day.y)
+# df.comp.KG         <- df.joined %>% filter(KG.x != KG.y)
+# df.comp.CM         <- df.joined %>% filter(CM.x != CM.y)
+# df.comp.PB         <- df.joined %>% filter(PB.x != PB.y)
+# df.comp.PC         <- df.joined %>% filter(PC.x != PC.y)
+# df.comp.TEMP       <- df.joined %>% filter(TEMP.x != TEMP.y)
+# df.comp.RDT_TIME   <- df.joined %>% filter(RDT_TIME.x != RDT_TIME.y)
+# df.comp.rdt_result <- df.joined %>% filter(rdt_result.x != rdt_result.y)
+# df.comp.Hb         <- df.joined %>% filter(Hb.x != Hb.y)
+# 
+# #Discrepancies = 1 --> 0 [Resolved on 20240925]
+# df.comp.month <- df.comp.month %>% dplyr::select(site_code.x:time_point, month.x, day.x, month.y, day.y)
+# #Discrepancies = 66 --> 56 --> 43 --> 0 [Resolved on 20240925]
+# df.comp.day <- df.comp.day %>% dplyr::select(site_code.x:time_point, month.x, day.x, month.y, day.y) %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 120 --> 119 --> 3 --> 0 [Resolved on 20240926]
+# df.comp.KG <- df.comp.KG %>% dplyr::select(site_code.x:time_point, KG.x, KG.y) %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 94 --> 91 --> 90 --> 86 --> 5 --> 0 [Resolved on 20240926]
+# df.comp.CM <- df.comp.CM %>% dplyr::select(site_code.x:time_point, CM.x, CM.y) %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 16 --> 0 [Resolved on 20240925]
+# df.comp.PB <- df.comp.PB %>% dplyr::select(site_code.x:time_point, PB.x, PB.y) %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 15 --> 0 [Resolved on 20240925]
+# df.comp.PC <- df.comp.PC %>% dplyr::select(site_code.x:time_point, PC.x, PC.y) %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 70 --> 0 [Resolved on 20240926]
+# df.comp.TEMP <- df.comp.TEMP %>% dplyr::select(site_code.x:time_point, TEMP.x, TEMP.y) %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 128 --> 0 [Resolved on 20240925]
+# df.comp.RDT_TIME <- df.comp.RDT_TIME %>% dplyr::select(site_code.x:time_point, RDT_TIME.x, RDT_TIME.y) %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 36 --> 21 --> 12 --> 0 [All resolved on 20240925]
+# df.comp.rdt_result <- df.comp.rdt_result %>% dplyr::select(site_code.x:day.x, rdt_result.x, rdt_result.y)
+# #Discrepancies = 9 --> 0 [All resolved on 20240924]
+# df.comp.Hb <- df.comp.Hb %>% dplyr::select(site_code.x:time_point, Hb.x, Hb.y)
+# 
+# ########################################################################################################################
+# #Test for NA discrepancies : X is NA but Y has a value
+# #Discrepancies = 4 --> 0 [All resolved on 20240926]
+# df.comp.NAx.month      <- df.joined %>% filter(is.na(month.x) & !is.na(month.y))           %>% dplyr::select(site_code.x:time_point, month.x, month.y)           %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 3 --> 0 [All resolved on 20240926]
+# df.comp.NAx.day        <- df.joined %>% filter(is.na(day.x) & !is.na(day.y))               %>% dplyr::select(site_code.x:time_point, day.x, day.y)               %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 6 --> 1 --> 0 [All resolved on 20240926]
+# df.comp.NAx.KG         <- df.joined %>% filter(is.na(KG.x) & !is.na(KG.y))                 %>% dplyr::select(site_code.x:time_point, KG.x, KG.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 9 --> 7 --> 0 [All resolved on 20240926]
+# df.comp.NAx.CM         <- df.joined %>% filter(is.na(CM.x) & !is.na(CM.y))                 %>% dplyr::select(site_code.x:time_point, CM.x, CM.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 12 --> 8 --> 0 [All resolved on 20240926]
+# df.comp.NAx.PB         <- df.joined %>% filter(is.na(PB.x) & !is.na(PB.y))                 %>% dplyr::select(site_code.x:time_point, PB.x, PB.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 6 --> 3 --> 0 [All resolved on 20240926]
+# df.comp.NAx.PC         <- df.joined %>% filter(is.na(PC.x) & !is.na(PC.y))                 %>% dplyr::select(site_code.x:time_point, PC.x, PC.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 2 --> 0 [All resolved on 20240926]
+# df.comp.NAx.TEMP       <- df.joined %>% filter(is.na(TEMP.x) & !is.na(TEMP.y))             %>% dplyr::select(site_code.x:time_point, TEMP.x, TEMP.y)             %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 4 --> 3 --> 0 [All resolved on 20240926]
+# df.comp.NAx.RDT_TIME   <- df.joined %>% filter(is.na(RDT_TIME.x) & !is.na(RDT_TIME.y))     %>% dplyr::select(site_code.x:time_point, RDT_TIME.x, RDT_TIME.y)     %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 3 --> 0 [All resolved on 20240926]
+# df.comp.NAx.rdt_result <- df.joined %>% filter(is.na(rdt_result.x) & !is.na(rdt_result.y)) %>% dplyr::select(site_code.x:time_point, rdt_result.x, rdt_result.y) %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 3 --> 0 [All resolved on 20240926]
+# df.comp.NAx.Hb         <- df.joined %>% filter(is.na(Hb.x) & !is.na(Hb.y))                 %>% dplyr::select(site_code.x:time_point, Hb.x, Hb.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
+# 
+# ########################################################################################################################
+# #Test for NA discrepancies : X has a value but Y is NA
+# #Discrepancies = 0
+# df.comp.NAy.month      <- df.joined %>% filter(!is.na(month.x) & is.na(month.y) & !is.na(month.y))           %>% dplyr::select(site_code.x:time_point, month.x, month.y)           %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 0
+# df.comp.NAy.day        <- df.joined %>% filter(!is.na(day.x) & is.na(day.y) & !is.na(month.y))               %>% dplyr::select(site_code.x:time_point, day.x, day.y)               %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 0
+# df.comp.NAy.KG         <- df.joined %>% filter(!is.na(KG.x) & is.na(KG.y) & !is.na(month.y))                 %>% dplyr::select(site_code.x:time_point, KG.x, KG.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 8 --> 4 --> 0 [All resolved on 20240926]
+# df.comp.NAy.CM         <- df.joined %>% filter(!is.na(CM.x) & is.na(CM.y) & !is.na(month.y))                 %>% dplyr::select(site_code.x:time_point, CM.x, CM.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 14 --> 0 [All resolved on 20240926]
+# df.comp.NAy.PB         <- df.joined %>% filter(!is.na(PB.x) & is.na(PB.y) & !is.na(month.y))                 %>% dplyr::select(site_code.x:time_point, PB.x, PB.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 9 -- > 4 --> 0 [All resolved on 20240926]
+# df.comp.NAy.PC         <- df.joined %>% filter(!is.na(PC.x) & is.na(PC.y) & !is.na(month.y))                 %>% dplyr::select(site_code.x:time_point, PC.x, PC.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 0
+# df.comp.NAy.TEMP       <- df.joined %>% filter(!is.na(TEMP.x) & is.na(TEMP.y) & !is.na(month.y))             %>% dplyr::select(site_code.x:time_point, TEMP.x, TEMP.y)             %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 0
+# df.comp.NAy.RDT_TIME   <- df.joined %>% filter(!is.na(RDT_TIME.x) & is.na(RDT_TIME.y) & !is.na(month.y))     %>% dplyr::select(site_code.x:time_point, RDT_TIME.x, RDT_TIME.y)     %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 4 --> 0 [All resolved on 20240926]
+# df.comp.NAy.rdt_result <- df.joined %>% filter(!is.na(rdt_result.x) & is.na(rdt_result.y) & !is.na(month.y)) %>% dplyr::select(site_code.x:time_point, rdt_result.x, rdt_result.y) %>% arrange(time_point, site_code.x, unique_ind_id)
+# #Discrepancies = 11 --> 0 [All resolved on 20240926]
+# df.comp.NAy.Hb         <- df.joined %>% filter(!is.na(Hb.x) & is.na(Hb.y) & !is.na(month.y))                 %>% dplyr::select(site_code.x:time_point, Hb.x, Hb.y)                 %>% arrange(time_point, site_code.x, unique_ind_id)
 
 
 ##############################################################################################################################
 # DATA CLEANING 2: Checking for data recording errors
-# 2A: RDT data
+##############################################################################################################################
+
+#Adding an id code with time point specified for convenience
+df.primary <- df.primary %>% mutate(full.code = paste0(unique_ind_id, ".", time_point)) %>%
+  dplyr::select(site_code, unique_ind_id, full.code, time_point, month:rdt_result.coded)
+##############################################################################################################################
+# 2.1: RDT data
 ##############################################################################################################################
 
 #Error cases:
-# RDT result is not valid (pan, pf, panpf, neg)
-# RDT result with no sample date recorded or sample date but no result
 
-#Checking for duplicate unique_ind_ids
-dfS6i[duplicated(dfS6i$unique_ind_id), ]
-dfS5i[duplicated(dfS5i$unique_ind_id), ]
-dfS3i[duplicated(dfS3i$unique_ind_id), ]
-dfS2S1i[duplicated(dfS2S1i$unique_ind_id), ]
-dfN1N5i[duplicated(dfN1N5i$unique_ind_id), ]
-
-##############################################################################################################################
-# DATA CLEANING 2: Checking for data recording errors
-# 2B: Anemia-hemoglobin data
-##############################################################################################################################
-
-#Error cases:
-# Hemoglobin outside of plausible range for age-sex group
-# Hb result with no sample date recorded or sample date but no result
-
+#RDT result is not valid (pan, pf, panpf, neg)
+table(df.primary$rdt_result)
+#RDT result with no sample date recorded or sample date but no result
+df.primary %>% filter((is.na(month) | is.na(day)) & !is.na(rdt_result.coded))
+#List of known exceptions (verified samples where no RDT result expected)
+v.known_RDT_no_samples <- c("N1.05.03.T01", "N2.01.05.T02", "N2.01.05.T03", 
+                            "N4.45.02.T10", "S3.01.05.T10", "S6.24.02.T01", 
+                            "S6.24.02.T03", "S6.24.02.T04", "S6.24.02.T05")
+df.primary %>% filter(!is.na(month) & is.na(rdt_result) & KG > 9 & !(full.code %in% v.known_RDT_no_samples))
 
 ##############################################################################################################################
-# DATA CLEANING 2: Checking for data recording errors
-# 2C: Height data
+# 2.2: Anemia-hemoglobin data
 ##############################################################################################################################
 
 #Error cases:
-# Height outside of plausible range for age-sex group
-# Height result with no sample date recorded or sample date but no result
-
-
-##############################################################################################################################
-# DATA CLEANING 2: Checking for data recording errors
-# 2D: Weight data
-##############################################################################################################################
-
-#Error cases:
-# Weight outside of plausible range for age-sex group
-# Weight result with no sample date recorded or sample date but no result
-
+#Hemoglobin outside of plausible range
+df.primary %>% filter(!is.na(Hb)) %>% filter(!is.na(KG)) %>%
+  ggplot(aes(x = KG, y = Hb)) +
+  geom_jitter() +
+  theme_light()
+#Hb result with no sample date recorded or sample date but no result
+df.primary %>% filter((is.na(month) | is.na(day)) & !is.na(Hb))
 
 ##############################################################################################################################
-# DATA CLEANING 2: Checking for data recording errors
-# 2E: Height for Weight data
+# 2.3: Height data
 ##############################################################################################################################
 
 #Error cases:
-# HFW outside of plausible range for age-sex group
+#Height outside of plausible range
+hist(df.primary$CM)
+#Height result with no sample date recorded or sample date but no result
+df.primary %>% filter((is.na(month) | is.na(day)) & !is.na(CM))
+
+##############################################################################################################################
+# 2.4: Weight data
+##############################################################################################################################
+
+#Error cases:
+#Weight outside of plausible range
+hist(df.primary$KG)
+#Weight result with no sample date recorded or sample date but no result
+df.primary %>% filter((is.na(month) | is.na(day)) & !is.na(KG))
+#No weight result but other data
+#Hb
+df.primary %>% filter(!is.na(Hb) & is.na(KG))
+#List of known exceptions (verified samples where no weight result expected)
+v.known_Weight_no_samples1 <- c("N1.04.01", "N1.08.04", "N2.01.05",
+                                "N2.23.01", "N2.23.02", "N5.05.02",
+                                "S2.02.01", "S2.09.03", "S5.04.11",
+                                "S5.53.01")
+df.primary %>% filter(!is.na(Hb) & is.na(KG) & !(unique_ind_id %in% v.known_Weight_no_samples1))
+#RDT
+df.primary %>% filter(!is.na(rdt_result) & is.na(KG) & !(unique_ind_id %in% v.known_Weight_no_samples1))
+#List of known exceptions (verified samples where no weight result expected)
+v.known_Weight_no_samples2 <- c("N2.03.01.T03", "N2.03.01.T05", "N2.20.08.T08", "N2.34.01.T08", "N2.51.03.T08", "N2.51.04.T08",
+                                "N5.02.02.T02", "N5.02.02.T04", "N5.02.02.T05", "N5.02.02.T06", "N5.02.02.T07", "N5.02.02.T08",
+                                "N5.06.02.T11", "S1.37.08.T07", "S2.51.02.T04", "S2.21.01.T09", "S3.56.01.T01", "S3.56.03.T01",
+                                "S3.55.03.T08", "S3.04.06.T09", "S5.06.06.T02", "S5.28.03.T05", "S5.07.01.T07", "S5.61.02.T07",
+                                "S5.07.01.T08", "S5.07.01.T09", "S6.16.03.T01", "S6.80.03.T01", "S6.04.01.T08", "S6.21.01.T08",
+                                "S6.04.01.T09", "S6.21.01.T09", "S6.34.02.T09")
+df.primary %>% filter(!is.na(rdt_result) & is.na(KG) & !(unique_ind_id %in% v.known_Weight_no_samples1) & !(full.code %in% v.known_Weight_no_samples2))
+
+##############################################################################################################################
+# 2.5: Height for weight data
+##############################################################################################################################
+
+#Error cases:
+# HFW/WFH outside of plausible range
+df.primary %>% filter(!is.na(CM)) %>% filter(!is.na(KG)) %>%
+  ggplot(aes(x = KG, y = CM, color = site_code)) +
+  geom_point(alpha = 0.7) +
+  geom_smooth() +
+  scale_color_viridis_d(option = "turbo") +
+  theme_bw()
+#Approx. 10 outliers to check***
+df.primary.HFW <- df.primary %>% filter(!is.na(CM)) %>% filter(!is.na(KG)) %>% mutate(hfw = CM/KG, wfh = KG/CM)
+
+#Using a gam to identify outliers
+mod_gam1 = gam(wfh ~ s(KG), data = df.primary.HFW)
+summary(mod_gam1)
+#Some outliers apparent
+hist(residuals.gam(mod_gam1))
+#Adding the residual for each observation (using absolute value to look for largest outliers)
+df.primary.HFW <- df.primary.HFW %>% mutate(abs.residuals.gam = abs(residuals.gam(mod_gam1)))
+
+df.primary.HFW %>% 
+  ggplot(aes(x = KG, y = wfh)) +
+  geom_point(aes(color = abs.residuals.gam), alpha = 0.8) +
+  geom_smooth() +
+  scale_color_viridis_c(option = "inferno", end = 0.9) +
+  theme_bw()
+df.primary.HFW %>% filter(abs.residuals.gam > 0.05)
+#Two individuals with high weight for age (seems validated by measurements)
+v.known_Height_issues1 <- c("S1.14.02.T05", "S1.25.02.T03")
+df.primary.HFW %>% filter(abs.residuals.gam > 0.05) %>% filter(!(full.code %in% v.known_Height_issues1))
+
+#Given less variance at younger ages, check for outliers for KG < 40
+df.primary.HFW %>%
+  ggplot(aes(x = KG, y = abs.residuals.gam)) +
+  geom_point(aes(color = abs.residuals.gam), alpha = 0.8) +
+  scale_color_viridis_c(option = "inferno", end = 0.9) +
+  theme_bw()
+df.primary.HFW %>% filter(KG < 40) %>% filter(abs.residuals.gam > 0.035) %>% filter(!(full.code %in% v.known_Height_issues1))
+v.known_Height_issues2 <- c("S6.94.09.T01", "S2.56.03.T03")
+df.primary.HFW %>% filter(KG < 40) %>% filter(abs.residuals.gam > 0.030) %>% filter(!(full.code %in% v.known_Height_issues2))
+
+
+
+
+##############################################################################################################################
+# 2.6: Height and weight for age data
+##############################################################################################################################
+
+# Bring in age data
+
+
+#Error cases:
+#HFA/WFA outside of plausible range
+
+
+##############################################################################################################################
+# 2.7: Weight-Height Z scores
+##############################################################################################################################
+
 # Using z scores for relevant age groups
 
 
+
 ##############################################################################################################################
-# DATA CLEANING 2: Checking for data recording errors
-# 2F: Height and Weight for Age data
+# 2.8: MUAC/PB data
 ##############################################################################################################################
 
 #Error cases:
-# HFA/WFA outside of plausible range
+#MUAC/PB outside of plausible range
+hist(df.primary$PB)
+
+df.primary %>% filter(!is.na(PB)) %>% filter(!is.na(KG)) %>%
+  ggplot(aes(x = KG, y = PB, color = site_code)) +
+  geom_point(alpha = 0.7) +
+  scale_color_viridis_d(option = "turbo") +
+  theme_bw()
+#Approx. 5 outliers to address***
+
+##############################################################################################################################
+# 2.9: Cranial Circumference/PC data
+##############################################################################################################################
+
+#Error cases:
+#PC outside of plausible range
+hist(df.primary$PC)
+
+df.primary %>% filter(!is.na(PC)) %>% filter(!is.na(KG)) %>%
+  ggplot(aes(x = KG, y = PC, color = site_code)) +
+  geom_point(alpha = 0.7) +
+  scale_color_viridis_d(option = "turbo") +
+  theme_bw()
+#Approx. 5 outliers to address***
+
+
+
+##############################################################################################################################
+# 2.10: Temperature data
+##############################################################################################################################
+
+#Error cases:
+#TEMP outside of plausible range
+hist(df.primary$TEMP)
+
+df.primary %>% filter(!is.na(TEMP)) %>% 
+  ggplot(aes(x = TEMP, y = 1, color = TEMP)) +
+  geom_jitter(alpha = 0.7) +
+  scale_color_viridis_c(option = "magma") +
+  ylim(0, 2) +
+  theme_bw()
+#Approx. 2 outliers to address***
+
+
+##############################################################################################################################
+# 2.11: RDT Time data
+##############################################################################################################################
+
+#Error cases:
+#TEMP outside of plausible range
+hist(df.primary$RDT_TIME)
+
+df.primary %>% filter(!is.na(RDT_TIME)) %>% 
+  ggplot(aes(x = RDT_TIME, y = site_code, color = RDT_TIME)) +
+  geom_jitter(alpha = 0.7) +
+  scale_color_viridis_c(option = "mako") +
+  facet_wrap(vars(time_point)) +
+  theme_bw()
+#Approx. 5 outliers to address***
+
+
+
+###***After cleaning data for errors, tidy the data for downstream use
+###*Drop z scores then recalculate in processing script
+###*Add age and age cat and sex
+###*recode RDT as 1 and 0
+
+###***Analysis/processing
+###*Calculate Z scores, with flag for valid vs invalid
+###*Calculate anemia cats with flag for valid vs invalid
+###*Calculate MAM/SAM via PB/MUAC
 
 
 
 
-
-
-
-
-####################################################################################################################################
-#Playing with height and weight data
-
-#Reading in data
-dfS6i   <- readr::read_csv("/Users/blrice/Documents/R GIT REPOS/2022_MNJ_TAZO/data_rdt/raw_data/S6_DATA_ENTRY_EST_20230702.csv")
-dfS5i   <- readr::read_csv("/Users/blrice/Documents/R GIT REPOS/2022_MNJ_TAZO/data_rdt/raw_data/S5_DATA_ENTRY_EST_20230705.csv")
-dfS3i   <- readr::read_csv("/Users/blrice/Documents/R GIT REPOS/2022_MNJ_TAZO/data_rdt/raw_data/S3_DATA_ENTRY_EST_20230705.csv")
-dfS2S1i <- readr::read_csv("/Users/blrice/Documents/R GIT REPOS/2022_MNJ_TAZO/data_rdt/raw_data/S2S1_DATA_ENTRY_EST_20230705.csv")
-dfN1N5i <- readr::read_csv("/Users/blrice/Documents/R GIT REPOS/2022_MNJ_TAZO/data_rdt/raw_data/N54321_DATA_ENTRY_EST_20230705.csv")
-
-#Reading in RDT data (also contains age data)
-df.rdt <- readr::read_csv("/Users/blrice/Documents/R GIT REPOS/2022_MNJ_TAZO/data_rdt/rdt_data_20230705.csv")
-
-####################################################################################################################################
-#Processing height and weight data
-
-#Dropping blank rows
-dfS6i   <- dfS6i   %>% filter(!(is.na(unique_ind_id)))
-dfS5i   <- dfS5i   %>% filter(!(is.na(unique_ind_id)))
-dfS3i   <- dfS3i   %>% filter(!(is.na(unique_ind_id)))
-dfS2S1i <- dfS2S1i %>% filter(!(is.na(unique_ind_id)))
-dfN1N5i <- dfN1N5i %>% filter(!(is.na(unique_ind_id)))
-
-
-
-####################################################################################################################################
-
-#Making a vector of column names for the columns keeping here
-cols_to_keep2 <- c("unique_ind_id",
-                   "T01_KG","T01_CM",
-                   "T02_KG","T02_CM",
-                   "T03_KG","T03_CM",
-                   "T04_KG","T04_CM",
-                   "T05_KG","T05_CM",
-                   "T06_KG","T06_CM",
-                   "T07_KG","T07_CM",
-                   "T08_KG","T08_CM",
-                   "T09_KG","T09_CM",
-                   "T10_KG","T10_CM",
-                   "T11_KG","T11_CM")
-#Selecting columns
-dfS6w   <- dfS6i   %>% select(all_of(cols_to_keep2))
-dfS5w   <- dfS5i   %>% select(all_of(cols_to_keep2))
-dfS3w   <- dfS3i   %>% select(all_of(cols_to_keep2))
-dfS2S1w <- dfS2S1i %>% select(all_of(cols_to_keep2))
-dfN1N5w <- dfN1N5i %>% select(all_of(cols_to_keep2))
-
-####################################################################################################################################
-#Combining data files
-df1 <- rbind(dfS2S1w, dfS3w, dfS5w, dfS6w, dfN1N5w)
-
-####################################################################################################################################
-#Pivoting longer
-df2 <- df1 %>% 
-  #Pivoting
-  pivot_longer(
-    #Specify the columns to tuck under
-    #NOT The columns to stay at the left
-    cols = !(unique_ind_id),
-    #Splitting the variable (e.g., rdt result, date of sample) from the time point (e.g., T08)
-    #Using the spacer "_" that separates variable name from time_point
-    names_to = c("time_point", "variable"),
-    names_sep = "_",
-    #sending values to a column named value
-    values_to = "value"
-  )
-head(df2)
-
-#Too long: Pivoting wider to get column for weight and height
-df2 <- df2 %>%
-  pivot_wider(names_from = variable, values_from = value)
-head(dfw1)
-
-####################################################################################################################################
-#Combining height and weight data with RDT and age data
-
-#Creating 'full_id (unique_ind_id + time_point)
-df3    <- df2    %>% mutate(full_id = paste0(unique_ind_id, "_", time_point)) %>% select(-c(time_point, unique_ind_id))
-df.rdt <- df.rdt %>% mutate(full_id = paste0(unique_ind_id, "_", time_point))
-#Joining
-df4 <- full_join(df.rdt, df3, by = join_by(full_id)) %>%
-  select(full_id, unique_ind_id:time_point, rdt.result, KG, CM, sample.date:age.cat.at.sample)
-
-
-####################################################################################################################################
-#Exporting processed height and weight data (merged with RDT data) for downstream plotting and merging with other data
-
-#Export in long format
-write_csv(df4, "/Users/blrice/Downloads/rdt_anthro_data_20230707.csv")
 
