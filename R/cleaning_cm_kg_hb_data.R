@@ -6,7 +6,7 @@ library(zscorer)
 
 
 ##############################################################################################################################
-# Reading in data
+# Reading in data: Google Sheets
 ##############################################################################################################################
 
 #Read in data from google sheets
@@ -20,10 +20,22 @@ url.S6    <- "https://docs.google.com/spreadsheets/d/1ojJLlADexiSp-CPujyHb38xSyk
 #Read in
 df.N1N5i  <- read_sheet(url.N1N5, col_types = "c")
 df.S1S2i  <- read_sheet(url.S1S2, col_types = "c")
-df.S3i    <- read_sheet(url.S3, col_types = "c")
-df.S5i    <- read_sheet(url.S5, col_types = "c")
-df.S6i    <- read_sheet(url.S6, col_types = "c")
+df.S3i    <- read_sheet(url.S3,   col_types = "c")
+df.S5i    <- read_sheet(url.S5,   col_types = "c")
+df.S6i    <- read_sheet(url.S6,   col_types = "c")
 
+##############################################################################################################################
+# Reading in data: CSV files
+##############################################################################################################################
+
+#Download CSV files by clicking download as CSV from google sheets online
+#Note: Need to change file path depending on folders on your computer
+
+df.N1N5i  <- readr::read_csv("/Users/blrice/Library/CloudStorage/Dropbox/Lab Projects/2020 Projects/CRS2020/1 DATA/DATA_ENTRY_WORK/20240916 Data Entry Resolutions/N54321_DATA_ENTRY_EST_20241001 - Olo.csv", col_types = list(.default = col_character()))
+df.S1S2i  <- readr::read_csv("/Users/blrice/Library/CloudStorage/Dropbox/Lab Projects/2020 Projects/CRS2020/1 DATA/DATA_ENTRY_WORK/20240916 Data Entry Resolutions/S2S1_DATA_ENTRY_EST_20241001 - Olo.csv", col_types = list(.default = col_character()))
+df.S3i    <- readr::read_csv("/Users/blrice/Library/CloudStorage/Dropbox/Lab Projects/2020 Projects/CRS2020/1 DATA/DATA_ENTRY_WORK/20240916 Data Entry Resolutions/S3_DATA_ENTRY_EST_20241001 - Olo.csv", col_types = list(.default = col_character()))
+df.S5i    <- readr::read_csv("/Users/blrice/Library/CloudStorage/Dropbox/Lab Projects/2020 Projects/CRS2020/1 DATA/DATA_ENTRY_WORK/20240916 Data Entry Resolutions/S5_DATA_ENTRY_EST_20241001 - Olo.csv", col_types = list(.default = col_character()))
+df.S6i    <- readr::read_csv("/Users/blrice/Library/CloudStorage/Dropbox/Lab Projects/2020 Projects/CRS2020/1 DATA/DATA_ENTRY_WORK/20240916 Data Entry Resolutions/S6_DATA_ENTRY_EST_20241001 - Olo.csv", col_types = list(.default = col_character()))
 
 ##############################################################################################################################
 # First data cleaning steps
@@ -419,7 +431,7 @@ hist(df.primary$KG)
 df.primary %>% filter(is.na(sample.date) & !is.na(KG))
 #No weight result but other data
 #Hb
-df.primary %>% filter(!is.na(Hb) & is.na(KG))
+# df.primary %>% filter(!is.na(Hb) & is.na(KG))
 #List of known exceptions (verified samples where no weight result expected)
 v.known_Weight_no_samples1 <- c("N1.04.01", "N1.08.04", "N2.01.05",
                                 "N2.23.01", "N2.23.02", "N5.05.02",
@@ -429,14 +441,15 @@ v.known_Weight_no_samples1 <- c("N1.04.01", "N1.08.04", "N2.01.05",
                                 "N4.44.05", "N5.02.02")
 df.primary %>% filter(!is.na(Hb) & is.na(KG) & !(unique_ind_id %in% v.known_Weight_no_samples1))
 #RDT
-df.primary %>% filter(!is.na(rdt_result) & is.na(KG) & !(unique_ind_id %in% v.known_Weight_no_samples1))
+# df.primary %>% filter(!is.na(rdt_result) & is.na(KG) & !(unique_ind_id %in% v.known_Weight_no_samples1))
 #List of known exceptions (verified samples where no weight result expected)
 v.known_Weight_no_samples2 <- c("N2.03.01.T03", "N2.03.01.T05", "N2.20.08.T08", "N2.34.01.T08", "N2.51.03.T08", "N2.51.04.T08",
                                 "N5.02.02.T02", "N5.02.02.T04", "N5.02.02.T05", "N5.02.02.T06", "N5.02.02.T07", "N5.02.02.T08",
                                 "N5.06.02.T11", "S1.37.08.T07", "S2.51.02.T04", "S2.21.01.T09", "S3.56.01.T01", "S3.56.03.T01",
                                 "S3.55.03.T08", "S3.04.06.T09", "S5.06.06.T02", "S5.28.03.T05", "S5.07.01.T07", "S5.61.02.T07",
                                 "S5.07.01.T08", "S5.07.01.T09", "S6.16.03.T01", "S6.80.03.T01", "S6.04.01.T08", "S6.21.01.T08",
-                                "S6.04.01.T09", "S6.21.01.T09", "S6.34.02.T09", "N4.44.05.T01", "S6.18.02.T01", "S6.18.04.T01")
+                                "S6.04.01.T09", "S6.21.01.T09", "S6.34.02.T09", "N4.44.05.T01", "S6.18.02.T01", "S6.18.04.T01",
+                                "N3.13.13.T02", "S5.26.04.T03", "S5.65.04.T08")
 df.primary %>% filter(!is.na(rdt_result) & is.na(KG) & !(unique_ind_id %in% v.known_Weight_no_samples1) & !(full.code %in% v.known_Weight_no_samples2))
 
 ##############################################################################################################################
@@ -468,7 +481,7 @@ df.primary.HFW %>%
   geom_smooth() +
   scale_color_viridis_c(option = "inferno", end = 0.9) +
   theme_bw()
-df.primary.HFW %>% filter(abs.residuals.gam > 0.05)
+# df.primary.HFW %>% filter(abs.residuals.gam > 0.05)
 #Two individuals with high weight for age (seems validated by measurements)
 v.known_Height_issues1 <- c("S1.14.02.T05", "S1.25.02.T03")
 df.primary.HFW %>% filter(abs.residuals.gam > 0.05) %>% filter(!(full.code %in% v.known_Height_issues1))
@@ -519,7 +532,7 @@ dfz <- df.primary %>%
   #Filter out adults and NAs
   filter(!is.na(KG)) %>% filter(!is.na(CM)) %>% filter(age.days < 6940)
 
-#Calculations: wfh, wfa, hfa
+#Calculations: weight for height (wfh), weight for age (wfa), height for age (hfa)
 
 #Weight-for-height (wfh) z-scores for children with heights between 65 and 120 cm
 #(Wasting)
@@ -599,25 +612,36 @@ hist(residuals.gam(mod_gam.z))
 #Adding the residual for each observation (using absolute value to look for largest outliers)
 dfz.res <- dfz %>% filter(!is.na(wfaz)) %>% filter(!is.na(hfaz)) %>% mutate(abs.residuals.gam = abs(residuals.gam(mod_gam.z)))
 
-dfz.res %>% 
+dfz.res %>% filter(time_point != "T01") %>%
   ggplot(aes(x = age.yrs.at.sample, y = abs.residuals.gam)) +
   geom_point(aes(color = abs.residuals.gam), alpha = 0.8) +
   geom_smooth() +
   scale_color_viridis_c(option = "inferno", end = 0.9) +
   theme_bw()
-dfz.res %>% filter(abs.residuals.gam > 4)
 
 dfx <- dfz.res %>% filter(abs.residuals.gam > 4) %>% filter(time_point != "T01")
 dfy <- dfz.res %>% filter(unique_ind_id %in% dfx$unique_ind_id) %>% arrange(unique_ind_id, time_point) %>% dplyr::select(site_code:dob, KG, CM, PB, wfhz, wfaz, hfaz, abs.residuals.gam, age.yrs.at.sample)
 
 #Errors:
-# N2.22.06 - age should be younger
-# N3.13.13 - T02 KG too low
-# N4.23.11 - T07 CM too high
-# S1.57.07 - T06 CM too low
-# S2.57.03 - T05 KG too high
-# S5.26.04 - T03 CM too high; T06 CM too low
-# S5.65.04 - T08, T10, T11 not consistent
+# N2.22.06 - age should be younger?
+
+
+mod_gam.wfh = gam(wfhz ~ s(wfaz), data = dfz %>% filter(!is.na(wfhz)) %>% filter(!is.na(wfaz)))
+summary(mod_gam.wfh)
+#Some outliers apparent
+hist(residuals.gam(mod_gam.wfh))
+#Adding the residual for each observation (using absolute value to look for largest outliers)
+dfz.res2 <- dfz %>% filter(!is.na(wfhz)) %>% filter(!is.na(wfaz)) %>% mutate(abs.residuals.gam = abs(residuals.gam(mod_gam.wfh)))
+
+dfz.res2 %>% filter(time_point != "T01") %>%
+  ggplot(aes(x = age.yrs.at.sample, y = abs.residuals.gam)) +
+  geom_point(aes(color = abs.residuals.gam), alpha = 0.8) +
+  geom_smooth() +
+  scale_color_viridis_c(option = "inferno", end = 0.9) +
+  theme_bw()
+
+dfx <- dfz.res2 %>% filter(abs.residuals.gam > 4) %>% filter(time_point != "T01")
+dfy <- dfz.res2 %>% filter(unique_ind_id %in% dfx$unique_ind_id) %>% arrange(unique_ind_id, time_point) %>% dplyr::select(site_code:dob, KG, CM, PB, wfhz, wfaz, hfaz, abs.residuals.gam, age.yrs.at.sample)
 
 
 ##############################################################################################################################
@@ -640,8 +664,6 @@ df.primary %>% filter(!is.na(PB)) %>% filter(!is.na(KG)) %>%
 
 #Error cases:
 #PC outside of plausible range
-hist(df.primary$PC)
-
 df.primary %>% filter(!is.na(PC)) %>% filter(!is.na(KG)) %>%
   ggplot(aes(x = KG, y = PC, color = time_point)) +
   geom_point(alpha = 0.7) +
@@ -654,8 +676,6 @@ df.primary %>% filter(!is.na(PC)) %>% filter(!is.na(KG)) %>%
 
 #Error cases:
 #TEMP outside of plausible range
-hist(df.primary$TEMP)
-
 df.primary %>% filter(!is.na(TEMP)) %>% 
   ggplot(aes(x = TEMP, y = 1, color = TEMP)) +
   geom_jitter(alpha = 0.7) +
@@ -675,19 +695,17 @@ df.primary %>% filter(!is.na(RDT_TIME)) %>%
   ggplot(aes(x = RDT_TIME, y = site_code, color = RDT_TIME)) +
   geom_jitter(alpha = 0.7) +
   scale_color_viridis_c(option = "mako") +
-  facet_wrap(vars(time_point)) +
+  #facet_wrap(vars(time_point)) +
   theme_bw()
 
 
 
+##############################################################################################################################
+# Exporting data for downstream use
+##############################################################################################################################
 
-###***After cleaning data for errors, tidy the data for downstream use
-###*Drop z scores then recalculate in processing script
+# write_csv(df.primary, "/Users/blrice/Documents/GitHub/MANANJARY_MALARIA/data/rdt_hb_anthro_data.csv")
 
-###***Analysis/processing
-###*Calculate Z scores, with flag for valid vs invalid
-###*Calculate anemia cats with flag for valid vs invalid
-###*Calculate MAM/SAM via PB/MUAC
 
 
 
