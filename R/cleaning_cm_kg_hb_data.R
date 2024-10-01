@@ -2,6 +2,7 @@ library(tidyverse)
 library(patchwork)
 library(googlesheets4)
 library(mgcv)
+library(zscorer)
 
 
 ##############################################################################################################################
@@ -24,8 +25,12 @@ df.S5i    <- read_sheet(url.S5, col_types = "c")
 df.S6i    <- read_sheet(url.S6, col_types = "c")
 
 
+##############################################################################################################################
+# First data cleaning steps
+##############################################################################################################################
+
 #Cleaning up columns
-cols_to_keep <- c("unique_ind_id",
+cols_to_keep <- c("unique_ind_id", "dob_yr", "dob_mo", "dob_day", "sex", 
                   "T01_MO","T01_DATY","T01_KG","T01_CM","T01_PB","T01_PC","T01_TEMP","T01_RDT_TIME","T01_RDT","T01_Hb",
                   "T02_MO","T02_DATY","T02_KG","T02_CM","T02_PB","T02_PC","T02_TEMP","T02_RDT_TIME","T02_RDT","T02_Hb",
                   "T03_MO","T03_DATY","T03_KG","T03_CM","T03_PB","T03_PC","T03_TEMP","T03_RDT_TIME","T03_RDT","T03_Hb",
@@ -50,30 +55,20 @@ col_renames_lookup <- c(T01_RDT.TIME = "T01_RDT_TIME",
                         T10_RDT.TIME = "T10_RDT_TIME", 
                         T11_RDT.TIME = "T11_RDT_TIME")
 
-df.N1N5 <- df.N1N5i %>%
-  dplyr::select(any_of(cols_to_keep)) %>%
-  rename(any_of(col_renames_lookup)) %>%
-  pivot_longer(!unique_ind_id, names_sep = "_", names_to = c("time_point", "variable"))
-df.S1S2 <- df.S1S2i %>%
-  dplyr::select(any_of(cols_to_keep)) %>%
-  rename(any_of(col_renames_lookup)) %>%
-  pivot_longer(!unique_ind_id, names_sep = "_", names_to = c("time_point", "variable"))
-df.S3 <- df.S3i %>%
-  dplyr::select(any_of(cols_to_keep)) %>%
-  rename(any_of(col_renames_lookup)) %>%
-  pivot_longer(!unique_ind_id, names_sep = "_", names_to = c("time_point", "variable"))
-df.S5 <- df.S5i %>%
-  dplyr::select(any_of(cols_to_keep)) %>%
-  rename(any_of(col_renames_lookup)) %>%
-  pivot_longer(!unique_ind_id, names_sep = "_", names_to = c("time_point", "variable"))
-df.S6 <- df.S6i %>%
-  dplyr::select(any_of(cols_to_keep)) %>%
-  rename(any_of(col_renames_lookup)) %>%
-  pivot_longer(!unique_ind_id, names_sep = "_", names_to = c("time_point", "variable"))
+#Function to select columns, rename, and pivot
+f.tidy1 <- function(in.df){
+  out.df <- in.df %>% 
+    dplyr::select(any_of(cols_to_keep)) %>%
+    rename(any_of(col_renames_lookup)) %>%
+    pivot_longer(!unique_ind_id:sex, names_sep = "_", names_to = c("time_point", "variable"))
+  return(out.df)
+}
 
-##############################################################################################################################
-# First data cleaning steps
-##############################################################################################################################
+df.N1N5 <- f.tidy1(df.N1N5i)
+df.S1S2 <- f.tidy1(df.S1S2i)
+df.S3   <- f.tidy1(df.S3i)
+df.S5   <- f.tidy1(df.S5i)
+df.S6   <- f.tidy1(df.S6i)
 
 #Binding together and cleaning up columns
 df.primary <- rbind(df.N1N5, df.S1S2, df.S3, df.S5, df.S6) %>%
@@ -87,9 +82,10 @@ df.primary <- rbind(df.N1N5, df.S1S2, df.S3, df.S5, df.S6) %>%
   mutate(site_code = substr(unique_ind_id, 1, 2)) %>%
   dplyr::select(site_code, unique_ind_id:Hb) %>%
   arrange(site_code, time_point, unique_ind_id) %>%
-  mutate(across(month:Hb, ~ ifelse(. == "NA", NA, .))) %>%
+  mutate(across(site_code:Hb, ~ ifelse(. == "NA", NA, .))) %>%
   mutate(across(c(KG:TEMP, Hb), as.numeric)) %>%
-  mutate(across(c(day, RDT_TIME), as.integer))
+  mutate(across(c(day, RDT_TIME), as.integer)) %>%
+  mutate(across(c(dob_yr, dob_mo, dob_day), as.integer))
 
 #Checking for duplicate unique_ind_ids
 df.primary %>% group_by(unique_ind_id, time_point) %>%
@@ -107,6 +103,69 @@ df.primary <- df.primary %>%
     rdt_result == ""      ~ NA_integer_,
     is.na(rdt_result)     ~ NA_integer_
     ))
+
+#Translating sex to English
+df.primary <- df.primary %>% mutate(sex = case_when(
+  sex == "L"   ~ "M",
+  sex == "V"   ~ "F"))
+
+#Adding sampling date
+df.primary <- df.primary %>% 
+  mutate(sample.yr = case_when(
+    time_point == "T01" & !is.na(month) ~ 2021,
+    time_point == "T02" & !is.na(month) ~ 2021,
+    time_point == "T03" & !is.na(month) ~ 2022,
+    time_point == "T04" & !is.na(month) ~ 2022,
+    time_point == "T05" & !is.na(month) ~ 2022,
+    time_point == "T06" & !is.na(month) ~ 2022,
+    time_point == "T07" & !is.na(month) ~ 2022,
+    time_point == "T08" & !is.na(month) ~ 2022,
+    time_point == "T09" & !is.na(month) ~ 2022,
+    time_point == "T10" & !is.na(month) ~ 2023,
+    time_point == "T11" & !is.na(month) ~ 2023)) %>% 
+  mutate(sample.date = ymd(paste(sample.yr, month, day, sep = "_")))
+#ymd() will throw a warning for the NAs - individuals where there was no date of sampling because they weren't sampled
+#The error message displayed will show the count of rows with no date
+#Dropping piecewise date columns
+df.primary <- df.primary %>% dplyr::select(site_code:sex,
+                                           time_point, sample.date, 
+                                           KG:rdt_result, rdt_result.coded, Hb)
+
+#Fixing birthdates
+
+#Checking structure and for errors
+str(df.primary)
+table(df.primary$dob_yr)
+table(df.primary$dob_mo)  #Note the nonrandom distribution of month of birth
+table(df.primary$dob_day) #Note the surplus of 1st of month birthdays (and for the 10th, 15th...)
+
+#Making birthdates
+df.primary <- df.primary %>%
+  #Setting NAs as designated value
+  mutate(dob_mo  = replace_na(dob_mo,   6)) %>%
+  mutate(dob_day = replace_na(dob_day, 15)) %>%
+  #Combining into a dob column, date format
+  mutate(dob = ymd(paste0(dob_yr, "-", dob_mo, "-", dob_day))) %>%
+  #Calculating age at time of sample
+  mutate(age.yrs.at.sample = ifelse(as.numeric(as.numeric(sample.date-dob)/365.25) < 0, 
+                                    NA, 
+                                    as.numeric(sample.date-dob)/365.25)) %>%
+  mutate(age.cat.at.sample = case_when(
+    age.yrs.at.sample <   0 ~ NA_character_,
+    age.yrs.at.sample >=  0 & age.yrs.at.sample <   2 ~ "A_0_2ys",
+    age.yrs.at.sample >=  2 & age.yrs.at.sample <   6 ~ "B_2_5ys",
+    age.yrs.at.sample >=  6 & age.yrs.at.sample <  14 ~ "C_6_13ys",
+    age.yrs.at.sample >= 14 & age.yrs.at.sample <  22 ~ "D_14_21ys",
+    age.yrs.at.sample >= 22 & age.yrs.at.sample <  41 ~ "E_22_40ys",
+    age.yrs.at.sample >= 41 & age.yrs.at.sample < 110 ~ "F_40plus_ys")) %>%
+  #Selecting columns
+  dplyr::select(site_code:unique_ind_id, dob, sex,
+                time_point, sample.date, 
+                KG:rdt_result, rdt_result.coded, Hb,
+                age.yrs.at.sample, age.cat.at.sample)
+
+
+
 
 ##############################################################################################################################
 # DATA CLEANING 1: Checking for errors in data entry
@@ -308,7 +367,8 @@ f.qc.file_reader1 <- function(url, v.sheet.list){
 
 #Adding an id code with time point specified for convenience
 df.primary <- df.primary %>% mutate(full.code = paste0(unique_ind_id, ".", time_point)) %>%
-  dplyr::select(site_code, unique_ind_id, full.code, time_point, month:rdt_result.coded)
+  dplyr::select(site_code, unique_ind_id, full.code, time_point, dob:age.cat.at.sample)
+
 ##############################################################################################################################
 # 2.1: RDT data
 ##############################################################################################################################
@@ -318,12 +378,12 @@ df.primary <- df.primary %>% mutate(full.code = paste0(unique_ind_id, ".", time_
 #RDT result is not valid (pan, pf, panpf, neg)
 table(df.primary$rdt_result)
 #RDT result with no sample date recorded or sample date but no result
-df.primary %>% filter((is.na(month) | is.na(day)) & !is.na(rdt_result.coded))
+df.primary %>% filter((is.na(sample.date) & !is.na(rdt_result.coded)))
 #List of known exceptions (verified samples where no RDT result expected)
 v.known_RDT_no_samples <- c("N1.05.03.T01", "N2.01.05.T02", "N2.01.05.T03", 
                             "N4.45.02.T10", "S3.01.05.T10", "S6.24.02.T01", 
                             "S6.24.02.T03", "S6.24.02.T04", "S6.24.02.T05")
-df.primary %>% filter(!is.na(month) & is.na(rdt_result) & KG > 9 & !(full.code %in% v.known_RDT_no_samples))
+df.primary %>% filter(!is.na(sample.date) & is.na(rdt_result) & KG > 9 & !(full.code %in% v.known_RDT_no_samples))
 
 ##############################################################################################################################
 # 2.2: Anemia-hemoglobin data
@@ -336,7 +396,7 @@ df.primary %>% filter(!is.na(Hb)) %>% filter(!is.na(KG)) %>%
   geom_jitter() +
   theme_light()
 #Hb result with no sample date recorded or sample date but no result
-df.primary %>% filter((is.na(month) | is.na(day)) & !is.na(Hb))
+df.primary %>% filter(is.na(sample.date) & !is.na(Hb))
 
 ##############################################################################################################################
 # 2.3: Height data
@@ -346,7 +406,7 @@ df.primary %>% filter((is.na(month) | is.na(day)) & !is.na(Hb))
 #Height outside of plausible range
 hist(df.primary$CM)
 #Height result with no sample date recorded or sample date but no result
-df.primary %>% filter((is.na(month) | is.na(day)) & !is.na(CM))
+df.primary %>% filter(is.na(sample.date) & !is.na(CM))
 
 ##############################################################################################################################
 # 2.4: Weight data
@@ -356,7 +416,7 @@ df.primary %>% filter((is.na(month) | is.na(day)) & !is.na(CM))
 #Weight outside of plausible range
 hist(df.primary$KG)
 #Weight result with no sample date recorded or sample date but no result
-df.primary %>% filter((is.na(month) | is.na(day)) & !is.na(KG))
+df.primary %>% filter(is.na(sample.date) & !is.na(KG))
 #No weight result but other data
 #Hb
 df.primary %>% filter(!is.na(Hb) & is.na(KG))
@@ -364,7 +424,9 @@ df.primary %>% filter(!is.na(Hb) & is.na(KG))
 v.known_Weight_no_samples1 <- c("N1.04.01", "N1.08.04", "N2.01.05",
                                 "N2.23.01", "N2.23.02", "N5.05.02",
                                 "S2.02.01", "S2.09.03", "S5.04.11",
-                                "S5.53.01")
+                                "S5.53.01", "N2.03.01", "N2.20.08",
+                                "N2.34.01", "N2.51.03", "N2.51.04",
+                                "N4.44.05", "N5.02.02")
 df.primary %>% filter(!is.na(Hb) & is.na(KG) & !(unique_ind_id %in% v.known_Weight_no_samples1))
 #RDT
 df.primary %>% filter(!is.na(rdt_result) & is.na(KG) & !(unique_ind_id %in% v.known_Weight_no_samples1))
@@ -374,7 +436,7 @@ v.known_Weight_no_samples2 <- c("N2.03.01.T03", "N2.03.01.T05", "N2.20.08.T08", 
                                 "N5.06.02.T11", "S1.37.08.T07", "S2.51.02.T04", "S2.21.01.T09", "S3.56.01.T01", "S3.56.03.T01",
                                 "S3.55.03.T08", "S3.04.06.T09", "S5.06.06.T02", "S5.28.03.T05", "S5.07.01.T07", "S5.61.02.T07",
                                 "S5.07.01.T08", "S5.07.01.T09", "S6.16.03.T01", "S6.80.03.T01", "S6.04.01.T08", "S6.21.01.T08",
-                                "S6.04.01.T09", "S6.21.01.T09", "S6.34.02.T09")
+                                "S6.04.01.T09", "S6.21.01.T09", "S6.34.02.T09", "N4.44.05.T01", "S6.18.02.T01", "S6.18.04.T01")
 df.primary %>% filter(!is.na(rdt_result) & is.na(KG) & !(unique_ind_id %in% v.known_Weight_no_samples1) & !(full.code %in% v.known_Weight_no_samples2))
 
 ##############################################################################################################################
@@ -428,19 +490,134 @@ df.primary.HFW %>% filter(KG < 40) %>% filter(abs.residuals.gam > 0.030) %>% fil
 # 2.6: Height and weight for age data
 ##############################################################################################################################
 
-# Bring in age data
-
-
 #Error cases:
 #HFA/WFA outside of plausible range
-
+#HFA
+df.primary %>% filter(!is.na(CM)) %>% filter(age.yrs.at.sample < 20) %>%
+  ggplot(aes(x = age.yrs.at.sample, y = CM, color = site_code)) +
+  geom_point(alpha = 0.7) +
+  scale_color_viridis_d(option = "turbo") +
+  theme_bw()
+#WFA
+df.primary %>% filter(!is.na(KG)) %>% filter(age.yrs.at.sample < 25) %>%
+  ggplot(aes(x = age.yrs.at.sample, y = KG, color = site_code)) +
+  geom_point(alpha = 0.7) +
+  geom_smooth() +
+  scale_color_viridis_d(option = "turbo") +
+  theme_bw()
 
 ##############################################################################################################################
 # 2.7: Weight-Height Z scores
 ##############################################################################################################################
 
 # Using z scores for relevant age groups
+dfz <- df.primary %>% 
+  #Recoding sex: 1 (male) or 2 (female)
+  mutate(sex = case_when(sex == "M" ~ 1, sex == "F" ~ 2)) %>%
+  #Recoding age in days
+  mutate(age.days = age.yrs.at.sample*365.25) %>%
+  #Filter out adults and NAs
+  filter(!is.na(KG)) %>% filter(!is.na(CM)) %>% filter(age.days < 6940)
 
+#Calculations: wfh, wfa, hfa
+
+#Weight-for-height (wfh) z-scores for children with heights between 65 and 120 cm
+#(Wasting)
+dfz <- addWGSR(data = dfz, sex = "sex", firstPart = "KG", secondPart = "CM",       index = "wfh")
+#Weight-for-age (wfa) z-scores for children aged between zero and 120 months
+#(Underweight)
+dfz <- addWGSR(data = dfz, sex = "sex", firstPart = "KG", secondPart = "age.days", index = "wfa") 
+#Height-for-age (hfa) z-scores for children aged between 24 and 228 months
+#(Stunting)
+dfz <- addWGSR(data = dfz, sex = "sex", firstPart = "CM", secondPart = "age.days", index = "hfa") 
+
+dfz %>% filter(!is.na(wfhz)) %>%
+  ggplot(aes(x = age.yrs.at.sample, y = wfhz, color = site_code)) +
+  geom_point(alpha = 0.7) +
+  geom_hline(yintercept = c(-5, 5), color = "grey20") +
+  geom_hline(yintercept = c(-2, 2), color = "grey50") +
+  geom_hline(yintercept = 0, color = "black") +
+  facet_wrap(vars(time_point)) +
+  scale_color_viridis_d(option = "turbo") +
+  scale_y_continuous(breaks = c(5, 2, 0, -2, -5)) +
+  theme_bw()
+dfz %>% filter(!is.na(wfhz)) %>% filter(time_point != "T01") %>%
+  ggplot(aes(x = age.yrs.at.sample, y = wfhz, color = site_code)) +
+  geom_point(alpha = 0.7) +
+  geom_hline(yintercept = c(-5, 5), color = "grey20") +
+  geom_hline(yintercept = c(-2, 2), color = "grey50") +
+  geom_hline(yintercept = 0, color = "black") +
+  #facet_wrap(vars(time_point)) +
+  scale_color_viridis_d(option = "turbo") +
+  scale_y_continuous(breaks = c(5, 2, 0, -2, -5)) +
+  theme_bw()
+
+dfz %>% filter(!is.na(wfaz)) %>%
+  ggplot(aes(x = age.yrs.at.sample, y = wfaz, color = site_code)) +
+  geom_point(alpha = 0.7) +
+  geom_hline(yintercept = c(-5, 5), color = "grey20") +
+  geom_hline(yintercept = c(-2, 2), color = "grey50") +
+  geom_hline(yintercept = 0, color = "black") +
+  facet_wrap(vars(time_point)) +
+  scale_color_viridis_d(option = "turbo") +
+  scale_y_continuous(breaks = c(5, 2, 0, -2, -5)) +
+  theme_bw()
+
+dfz %>% filter(!is.na(hfaz)) %>%
+  ggplot(aes(x = age.yrs.at.sample, y = hfaz, color = site_code)) +
+  geom_point(alpha = 0.7) +
+  geom_hline(yintercept = c(-5, 5), color = "grey20") +
+  geom_hline(yintercept = c(-2, 2), color = "grey50") +
+  geom_hline(yintercept = 0, color = "black") +
+  facet_wrap(vars(time_point)) +
+  scale_color_viridis_d(option = "turbo") +
+  scale_y_continuous(breaks = c(5, 2, 0, -2, -5)) +
+  theme_bw()
+
+
+dfz %>% filter(!is.na(wfaz)) %>% filter(!is.na(hfaz)) %>%
+  ggplot(aes(x = wfaz, y = hfaz, color = site_code)) +
+  geom_point(alpha = 0.7) +
+  #facet_wrap(vars(time_point)) +
+  scale_color_viridis_d(option = "turbo") +
+  scale_y_continuous(breaks = c(5, 2, 0, -2, -5)) +
+  theme_bw()
+
+
+#Outliers
+dfz.x <- dfz %>% filter(abs(wfhz) >= 5 | abs(wfaz) >= 5 | abs(hfaz) >= 5) %>% filter(time_point != "T01")
+dfz.y <- dfz %>% filter(unique_ind_id %in% dfz.x$unique_ind_id) %>% arrange(unique_ind_id, time_point) %>% dplyr::select(site_code:dob, KG, CM, PB, wfhz, wfaz, hfaz, age.yrs.at.sample)
+#*** clean up especially for those not from T01
+#*Note the height/weight for age scores will flag some impossible ages
+#*Note that T01 measures seem bad - drop T01
+
+#Using a gam to identify outliers
+mod_gam.z = gam(hfaz ~ s(wfaz), data = dfz %>% filter(!is.na(wfaz)) %>% filter(!is.na(hfaz)))
+summary(mod_gam.z)
+#Some outliers apparent
+hist(residuals.gam(mod_gam.z))
+#Adding the residual for each observation (using absolute value to look for largest outliers)
+dfz.res <- dfz %>% filter(!is.na(wfaz)) %>% filter(!is.na(hfaz)) %>% mutate(abs.residuals.gam = abs(residuals.gam(mod_gam.z)))
+
+dfz.res %>% 
+  ggplot(aes(x = age.yrs.at.sample, y = abs.residuals.gam)) +
+  geom_point(aes(color = abs.residuals.gam), alpha = 0.8) +
+  geom_smooth() +
+  scale_color_viridis_c(option = "inferno", end = 0.9) +
+  theme_bw()
+dfz.res %>% filter(abs.residuals.gam > 4)
+
+dfx <- dfz.res %>% filter(abs.residuals.gam > 4) %>% filter(time_point != "T01")
+dfy <- dfz.res %>% filter(unique_ind_id %in% dfx$unique_ind_id) %>% arrange(unique_ind_id, time_point) %>% dplyr::select(site_code:dob, KG, CM, PB, wfhz, wfaz, hfaz, abs.residuals.gam, age.yrs.at.sample)
+
+#Errors:
+# N2.22.06 - age should be younger
+# N3.13.13 - T02 KG too low
+# N4.23.11 - T07 CM too high
+# S1.57.07 - T06 CM too low
+# S2.57.03 - T05 KG too high
+# S5.26.04 - T03 CM too high; T06 CM too low
+# S5.65.04 - T08, T10, T11 not consistent
 
 
 ##############################################################################################################################
@@ -456,7 +633,6 @@ df.primary %>% filter(!is.na(PB)) %>% filter(!is.na(KG)) %>%
   geom_point(alpha = 0.7) +
   scale_color_viridis_d(option = "turbo") +
   theme_bw()
-#Approx. 5 outliers to address***
 
 ##############################################################################################################################
 # 2.9: Cranial Circumference/PC data
@@ -467,13 +643,10 @@ df.primary %>% filter(!is.na(PB)) %>% filter(!is.na(KG)) %>%
 hist(df.primary$PC)
 
 df.primary %>% filter(!is.na(PC)) %>% filter(!is.na(KG)) %>%
-  ggplot(aes(x = KG, y = PC, color = site_code)) +
+  ggplot(aes(x = KG, y = PC, color = time_point)) +
   geom_point(alpha = 0.7) +
-  scale_color_viridis_d(option = "turbo") +
+  scale_color_viridis_d(option = "cividis", end = 0.95) +
   theme_bw()
-#Approx. 5 outliers to address***
-
-
 
 ##############################################################################################################################
 # 2.10: Temperature data
@@ -489,8 +662,6 @@ df.primary %>% filter(!is.na(TEMP)) %>%
   scale_color_viridis_c(option = "magma") +
   ylim(0, 2) +
   theme_bw()
-#Approx. 2 outliers to address***
-
 
 ##############################################################################################################################
 # 2.11: RDT Time data
@@ -506,14 +677,12 @@ df.primary %>% filter(!is.na(RDT_TIME)) %>%
   scale_color_viridis_c(option = "mako") +
   facet_wrap(vars(time_point)) +
   theme_bw()
-#Approx. 5 outliers to address***
+
 
 
 
 ###***After cleaning data for errors, tidy the data for downstream use
 ###*Drop z scores then recalculate in processing script
-###*Add age and age cat and sex
-###*recode RDT as 1 and 0
 
 ###***Analysis/processing
 ###*Calculate Z scores, with flag for valid vs invalid
