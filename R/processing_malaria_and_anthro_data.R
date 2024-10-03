@@ -198,4 +198,4 @@ df1 %>% filter(!is.na(Hb)) %>%
 
 
 #Exporting processed data
- write_csv(df1, "/Users/blrice/Documents/GitHub/MANANJARY_MALARIA/data/processed_data/rdt_hb_anthro_data.csv")
+# write_csv(df1, "/Users/blrice/Documents/GitHub/MANANJARY_MALARIA/data/processed_data/rdt_hb_anthro_data.csv")
