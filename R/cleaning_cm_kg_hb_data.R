@@ -31,11 +31,11 @@ df.S6i    <- read_sheet(url.S6,   col_types = "c")
 #Download CSV files by clicking download as CSV from google sheets online
 #Note: Need to change file path depending on folders on your computer
 
-df.N1N5i  <- readr::read_csv("/Users/blrice/Library/CloudStorage/Dropbox/Lab Projects/2020 Projects/CRS2020/1 DATA/DATA_ENTRY_WORK/20240916 Data Entry Resolutions/N54321_DATA_ENTRY_EST_20241001 - Olo.csv", col_types = list(.default = col_character()))
-df.S1S2i  <- readr::read_csv("/Users/blrice/Library/CloudStorage/Dropbox/Lab Projects/2020 Projects/CRS2020/1 DATA/DATA_ENTRY_WORK/20240916 Data Entry Resolutions/S2S1_DATA_ENTRY_EST_20241001 - Olo.csv", col_types = list(.default = col_character()))
-df.S3i    <- readr::read_csv("/Users/blrice/Library/CloudStorage/Dropbox/Lab Projects/2020 Projects/CRS2020/1 DATA/DATA_ENTRY_WORK/20240916 Data Entry Resolutions/S3_DATA_ENTRY_EST_20241001 - Olo.csv", col_types = list(.default = col_character()))
-df.S5i    <- readr::read_csv("/Users/blrice/Library/CloudStorage/Dropbox/Lab Projects/2020 Projects/CRS2020/1 DATA/DATA_ENTRY_WORK/20240916 Data Entry Resolutions/S5_DATA_ENTRY_EST_20241001 - Olo.csv", col_types = list(.default = col_character()))
-df.S6i    <- readr::read_csv("/Users/blrice/Library/CloudStorage/Dropbox/Lab Projects/2020 Projects/CRS2020/1 DATA/DATA_ENTRY_WORK/20240916 Data Entry Resolutions/S6_DATA_ENTRY_EST_20241001 - Olo.csv", col_types = list(.default = col_character()))
+# df.N1N5i  <- readr::read_csv("/Users/blrice/Library/CloudStorage/Dropbox/Lab Projects/2020 Projects/CRS2020/1 DATA/DATA_ENTRY_WORK/20240916 Data Entry Resolutions/N54321_DATA_ENTRY_EST_20241001 - Olo.csv", col_types = list(.default = col_character()))
+# df.S1S2i  <- readr::read_csv("/Users/blrice/Library/CloudStorage/Dropbox/Lab Projects/2020 Projects/CRS2020/1 DATA/DATA_ENTRY_WORK/20240916 Data Entry Resolutions/S2S1_DATA_ENTRY_EST_20241001 - Olo.csv", col_types = list(.default = col_character()))
+# df.S3i    <- readr::read_csv("/Users/blrice/Library/CloudStorage/Dropbox/Lab Projects/2020 Projects/CRS2020/1 DATA/DATA_ENTRY_WORK/20240916 Data Entry Resolutions/S3_DATA_ENTRY_EST_20241001 - Olo.csv", col_types = list(.default = col_character()))
+# df.S5i    <- readr::read_csv("/Users/blrice/Library/CloudStorage/Dropbox/Lab Projects/2020 Projects/CRS2020/1 DATA/DATA_ENTRY_WORK/20240916 Data Entry Resolutions/S5_DATA_ENTRY_EST_20241001 - Olo.csv", col_types = list(.default = col_character()))
+# df.S6i    <- readr::read_csv("/Users/blrice/Library/CloudStorage/Dropbox/Lab Projects/2020 Projects/CRS2020/1 DATA/DATA_ENTRY_WORK/20240916 Data Entry Resolutions/S6_DATA_ENTRY_EST_20241001 - Olo.csv", col_types = list(.default = col_character()))
 
 ##############################################################################################################################
 # First data cleaning steps
@@ -407,8 +407,16 @@ df.primary %>% filter(!is.na(Hb)) %>% filter(!is.na(KG)) %>%
   ggplot(aes(x = KG, y = Hb)) +
   geom_jitter() +
   theme_light()
-#Hb result with no sample date recorded or sample date but no result
+#Hb result with no sample date recorded
 df.primary %>% filter(is.na(sample.date) & !is.na(Hb))
+
+#Sample date but no result for Hb
+#Known exceptions:
+v.known_Hb_no_samples <- c("N4.45.02.T10", "S3.01.05.T10", "S1.37.08.T10", "S3.13.07.T10", "S5.22.05.T10")
+df.primary %>% filter(!is.na(sample.date) & is.na(Hb)) %>% filter(time_point == "T10") %>% filter(age.yrs.at.sample > 0.5) %>% filter(!(full.code %in% v.known_Hb_no_samples))
+
+#Two Hb results for one individual
+df.primary %>% filter(!is.na(Hb)) %>% group_by(full.code) %>% summarize(n = n()) %>% filter(n > 1)
 
 ##############################################################################################################################
 # 2.3: Height data
@@ -704,7 +712,7 @@ df.primary %>% filter(!is.na(RDT_TIME)) %>%
 # Exporting data for downstream use
 ##############################################################################################################################
 
-# write_csv(df.primary, "/Users/blrice/Documents/GitHub/MANANJARY_MALARIA/data/rdt_hb_anthro_data.csv")
+# write_csv(df.primary, "/Users/blrice/Documents/GitHub/MANANJARY_MALARIA/data/raw_data/malaria_nutrition_data/rdt_hb_anthro_data_raw.csv")
 
 
 

@@ -10,7 +10,7 @@ library(zscorer)
 #########################################################################################################
 # Read in data
 #########################################################################################################
-dfi <- readr::read_csv("/Users/blrice/Documents/GitHub/MANANJARY_MALARIA/data/rdt_hb_anthro_data.csv")
+dfi <- readr::read_csv("/Users/blrice/Documents/GitHub/MANANJARY_MALARIA/data/raw_data/malaria_nutrition_data/rdt_hb_anthro_data_raw.csv")
 
 #########################################################################################################
 # 1 # Calculate z scores
@@ -67,6 +67,7 @@ df1 %>% ggplot(aes(x = time_point, y = wfhz, color = wfhz)) +
 #########################################################################################################
 # 2 # Calculate MAM/SAM via PB/MUAC
 #########################################################################################################
+# https://www.ncbi.nlm.nih.gov/books/NBK601660/#ch1.s4
 
 #Thresholds: For children 5y and younger
 #   Moderate Acute Malnutrition (MAM):  PB/MUAC between 11.5 and 12.5
@@ -190,13 +191,11 @@ df1 %>% filter(!is.na(Hb)) %>% group_by(site_code, anemia.result) %>%
   geom_bar(stat = "identity") +
   theme_bw()
 
-
 df1 %>% filter(!is.na(Hb)) %>% 
   ggplot(aes(x = site_code, fill = anemia.result)) +
   geom_bar(stat = ) +
   theme_bw()
 
 
-##**** data cleaning: check for duplicate Hb measures
-
-
+#Exporting processed data
+ write_csv(df1, "/Users/blrice/Documents/GitHub/MANANJARY_MALARIA/data/processed_data/rdt_hb_anthro_data.csv")
