@@ -3,9 +3,7 @@ library(patchwork)
 library(ggrepel)
 library(geosphere)
 library(sf)
-library(raster)
 library(terra)
-library(elevatr)
 library(scales)
 
 ####################################################################################################
@@ -40,7 +38,9 @@ r.elev.mada <- aggregate(r.elev.mada, 6)
 df.elev.mada <- as.data.frame(r.elev.mada, xy = TRUE) %>%
   rename(elev_m = names(r.elev.mada)[1]) %>%
   mutate(elev_m = ifelse(elev_m < 0.001, NA, elev_m)) %>%
-  filter(!is.na(elev_m))
+  filter(!is.na(elev_m)) %>%
+  #dropping Comoros
+  filter(x > 47 | y < -14)
 
 #convert to data frame and clean
 df.elev.SE <- as.data.frame(r.elev.SE, xy = TRUE) %>% 
@@ -55,20 +55,15 @@ df.elev.SE <- as.data.frame(r.elev.SE, xy = TRUE) %>%
     elev_m >= 2.0 & elev_m < 5.0 ~ "2.0-5.0",
     elev_m >= 5.0 & elev_m < 10  ~ "5.0-10",
     elev_m >= 10  & elev_m < 100 ~ "10-100",
-    elev_m >= 100 & elev_m < 200 ~ "100-200",
-    elev_m >= 200                 ~ "200+")) %>%
-  mutate(elev.cat = factor(elev.cat, levels = c("<0.5", "0.5-1.0", "1.0-2.0", "2.0-5.0", "5.0-10", "10-100", "100-200", "200+"))) %>%
+    elev_m >= 100 & elev_m < 250 ~ "100-250",
+    elev_m >= 250                 ~ "250+")) %>%
+  mutate(elev.cat = factor(elev.cat, levels = c("<0.5", "0.5-1.0", "1.0-2.0", "2.0-5.0", "5.0-10", "10-100", "100-250", "250+"))) %>%
   filter(!is.na(elev.cat))
 
 
 ####################################################################################################
 ## MADAGSACAR MAP: Solid fill, highlighting MNJ district
 ####################################################################################################
-
-
-
-###*** Change color scale, rename scale "Elevation (m)"
-###*** Apply to SE too
 
 p.MADA <- ggplot() + 
   #Base layer: Madagascar, fill color set to match end of cividis color scale
@@ -105,9 +100,8 @@ p.MADA
 ## SE MADAGSACAR MAP (MNJ DISTRICT): Fill by elevation bin
 ####################################################################################################
 
-viridis_pal(option = "magma")(10)
-[1] "#000004FF" "#180F3EFF" "#451077FF" "#721F81FF" "#9F2F7FFF" "#CD4071FF" "#F1605DFF" "#FD9567FF"
-[9] "#FEC98DFF" "#FCFDBFFF"
+#Showing color scales to match fill
+# viridis_pal(option = "magma")(10)
 
 #Note the plot takes approx. 2 minutes to render when at low resolution
 #(change the aggregate factor above to make higher resolution when needed)
