@@ -89,7 +89,7 @@ p.MADA <- ggplot() +
   scale_fill_viridis_c(option = "magma", name = "Elevation (m)", direction = -1, end = 0.9) +
   #COORDS
   coord_sf() +
-  theme(legend.position = "left",
+  theme(legend.position = "right",
         panel.grid = element_blank(),
         axis.title = element_blank(), 
         axis.ticks = element_blank(),
@@ -150,7 +150,7 @@ p.SE <- ggplot() +
   scale_fill_viridis_d(option = "magma", name = "Elevation (m)", direction = -1, end = 0.95, begin = 0.15) +
   #COORDS
   coord_sf(xlim = c(47.5, 48.8), ylim = c(-20.7, -21.8)) +
-  theme(legend.position = "left",
+  theme(legend.position = "right",
     panel.grid = element_blank(),
     axis.title = element_blank(), 
     axis.ticks = element_blank(),
@@ -158,6 +158,6 @@ p.SE <- ggplot() +
 p.SE
 
 
-
+p.MADA + p.SE
 
 
