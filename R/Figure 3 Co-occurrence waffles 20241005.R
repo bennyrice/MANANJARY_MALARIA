@@ -158,6 +158,7 @@ p.ane <- df.ane %>% ggplot(aes(fill = category, values = n.hh)) +
 p.ane
 
 
+p.mam / p.csi
 
 (p.mam / p.csi) | p.ane
 

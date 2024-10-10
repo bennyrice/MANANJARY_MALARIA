@@ -93,7 +93,7 @@ dfs.by_site       <- dfs1 %>% filter(!is.na(date)) %>% group_by(code.new, time_p
 
 
 ####################################################################################################
-# Plot Time Series # Sampling time points and cyclones
+# 2A # Plot Time Series # Sampling time points and cyclones
 ####################################################################################################
 
 #Making a data frame for plotting time series
@@ -159,7 +159,8 @@ p.t2 <- dft %>% filter(!is.na(time_points)) %>%
   geom_point(shape = 15) +
   annotate("label", x = v.cyc.dates[1], y = 0.92, label = "Cyclone Batsirai", color = "orange") +
   annotate("label", x = v.cyc.dates[2], y = 0.92, label = "Cyclone Freddy",   color = "orange") +
-  geom_text(aes(x = mid.points.c, y = 0.97, label = time_points)) +
+  geom_text(data = dft %>% filter(!is.na(time_points)) %>% filter(!is.na(mid.points.c)),
+            aes(x = mid.points.c, y = 0.97, label = time_points)) +
   ylim(0.9, 1.1) +
   theme_void() +
   theme(legend.position = "none",
@@ -169,7 +170,7 @@ p.t2
 p.t1 / p.t2 + plot_layout(heights = c(3, 1))
 
 ####################################################################################################
-# Plot 1 # Change in malaria indicators over time
+# 2B # Change in malaria indicators over time
 ####################################################################################################
 
 #Confidence intervals: using binom.test() and Clopper and Pearson (1934) method
@@ -220,7 +221,7 @@ p1.all <- df.p1.all %>%
                 width = 0.06,        # Thinner horizontals on the Ts
                 color = v.p1.colors[1],
                 position="identity") +
-  ylab("Proportion of all individuals positive for malaria (by RDT)\n(All ages)") + xlab(NULL) +
+  ylab("Proportion of sampled individuals positive for malaria (by RDT)\nAll ages") + xlab(NULL) +
   ylim(0, 0.25) +
   theme_bw() + 
   theme(legend.position = "right",
@@ -247,7 +248,7 @@ p1.sac <- df.p1.sac %>%
                 width = 0.06,        # Thinner horizontals on the Ts
                 color = v.p1.colors[2],
                 position="identity") +
-  ylab("Proportion of all individuals positive for malaria (by RDT)\nSchool aged children (6-13y)") + xlab(NULL) +
+  ylab("Proportion of sampled individuals positive for malaria (by RDT)\nSchool aged children (6-13y)") + xlab(NULL) +
   ylim(0, 0.25) +
   theme_bw() + 
   theme(legend.position = "right",
@@ -274,7 +275,7 @@ p1.yc <- df.p1.yc %>%
                 width = 0.06,        # Thinner horizontals on the Ts
                 color = v.p1.colors[3],
                 position="identity") +
-  ylab("Proportion of all individuals positive for malaria (by RDT)\nYoung children (0-5y)") + xlab(NULL) +
+  ylab("Proportion of sampled individuals positive for malaria (by RDT)\nYoung children (0-5y)") + xlab(NULL) +
   ylim(0, 0.25) +
   theme_bw() + 
   theme(legend.position = "right",
@@ -286,7 +287,7 @@ p1.yc
 p1.all + p1.yc + p1.sac
 
 ####################################################################################################
-# Plot 2 # Change in acute malnutrition over time
+# 2C # Change in acute malnutrition over time
 ####################################################################################################
 
 df.p2 <- df2 %>% dplyr::select(unique_ind_id, code.new, time_point, wfhz, wasting.cat, PB, MUAC.cat) %>%
@@ -344,7 +345,7 @@ p2.PB + p2.wfh.z + p2.wfh.prop
 
 
 ####################################################################################################
-# Plot 3 # Change in selected food security indicators over time
+# 2D # Change in selected food security indicators over time
 ####################################################################################################
 
 

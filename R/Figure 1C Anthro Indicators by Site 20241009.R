@@ -60,7 +60,7 @@ df2 <- df1 %>%
 ####################################################################################################
 
 p1a <- df2 %>%
-  ggplot(aes(x = hfaz, y = code.new, color = stunting.cat)) +
+  ggplot(aes(x = hfaz, y = reorder(code.new, desc(code.new)), color = stunting.cat)) +
   geom_jitter(alpha = 0.5, width = 0) +
   scale_color_viridis_d(option = "inferno", name = "Stunting Outcome", begin = 0.07, end = 0.8) +
   scale_x_continuous(breaks = c(-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5), limits = c(-5, 5)) +
@@ -75,7 +75,7 @@ p1a
 ####################################################################################################
 
 p1b <- df2 %>%
-  ggplot(aes(x = wfaz, y = code.new, color = underweight.cat)) +
+  ggplot(aes(x = wfaz, y = reorder(code.new, desc(code.new)), color = underweight.cat)) +
   geom_jitter(alpha = 0.5, width = 0) +
   scale_color_viridis_d(option = "inferno", name = "Underweight Outcome", begin = 0.07, end = 0.8) +
   scale_x_continuous(breaks = c(-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5), limits = c(-5, 5)) +
@@ -91,7 +91,7 @@ p1b
 ####################################################################################################
 
 p1c <- df2 %>%
-  ggplot(aes(x = wfhz, y = code.new, color = wasting.cat)) +
+  ggplot(aes(x = wfhz, y = reorder(code.new, desc(code.new)), color = wasting.cat)) +
   geom_jitter(alpha = 0.5, width = 0) +
   scale_color_viridis_d(option = "inferno", name = "Acute Malnutrition Outcome\n(Height for weight)", begin = 0.07, end = 0.8) +
   scale_x_continuous(breaks = c(-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5), limits = c(-5, 5)) +
@@ -106,7 +106,7 @@ p1c
 ####################################################################################################
 
 p1d <- df2 %>% filter(!is.na(PB)) %>% filter(!is.na(MUAC.cat)) %>%
-  ggplot(aes(x = PB, y = code.new, color = MUAC.cat)) +
+  ggplot(aes(x = PB, y = reorder(code.new, desc(code.new)), color = MUAC.cat)) +
   geom_jitter(alpha = 0.5, width = 0.1) +
   scale_color_viridis_d(option = "inferno", name = "Acute Malnutrition Outcome\n(MUAC)", begin = 0.07, end = 0.8) +
   xlab("MUAC (cm)") +
