@@ -57,15 +57,15 @@ df2 <- df1 %>%
 ####################################################################################################
 
 dfs1 <- dfs.i %>%   mutate(code.new = case_when(site_code == "N5" ~ "MNJ.01",
-                                               site_code == "N4" ~ "MNJ.02",
-                                               site_code == "N3" ~ "MNJ.03",
-                                               site_code == "N2" ~ "MNJ.04",
-                                               site_code == "N1" ~ "MNJ.05",
-                                               site_code == "S1" ~ "MNJ.06",
-                                               site_code == "S2" ~ "MNJ.07",
-                                               site_code == "S3" ~ "MNJ.08",
-                                               site_code == "S5" ~ "MNJ.09",
-                                               site_code == "S6" ~ "MNJ.10"), .before = site_name) %>%
+                                                site_code == "N4" ~ "MNJ.02",
+                                                site_code == "N3" ~ "MNJ.03",
+                                                site_code == "N2" ~ "MNJ.04",
+                                                site_code == "N1" ~ "MNJ.05",
+                                                site_code == "S1" ~ "MNJ.06",
+                                                site_code == "S2" ~ "MNJ.07",
+                                                site_code == "S3" ~ "MNJ.08",
+                                                site_code == "S5" ~ "MNJ.09",
+                                                site_code == "S6" ~ "MNJ.10"), .before = site_name) %>%
   mutate(code.new = factor(code.new, levels = c("MNJ.01", "MNJ.02", "MNJ.03", "MNJ.04", "MNJ.05", "MNJ.06", "MNJ.07", "MNJ.08", "MNJ.09", "MNJ.10"))) %>%
   #Pivoting longer
   pivot_longer(!site_code:site_name, names_to = "time_point.day", values_to = "date.char") %>%
@@ -85,7 +85,7 @@ dfs1 <- dfs.i %>%   mutate(code.new = case_when(site_code == "N5" ~ "MNJ.01",
     time_point == "T09" ~ "T08",
     time_point == "T10" ~ "T09",
     time_point == "T11" ~ "T10"))
-  
+
 
 dfs.by_time_point <- dfs1 %>% filter(!is.na(date)) %>% group_by(time_point) %>% summarize(min.date = min(date), max.date = max(date))
 
@@ -141,14 +141,17 @@ v.cyc.dates <- c(ymd("2022-02-05"), ymd("2023-02-21"))
 
 p.t1 <- dfs.by_site %>% 
   ggplot(aes(x = date, y = reorder(code.new, desc(code.new)))) + 
+  #Adding cyclone timing
   geom_vline(xintercept = v.cyc.dates, color = "orange", linetype = "dashed") +
+  #Adding year breaks
+  geom_vline(xintercept = c(ymd("2022-01-01"), ymd("2023-01-01")), color = "grey80", linewidth = 0.5) +
   geom_point(shape = 15, size = 3) +
   geom_path(linetype = "dotted", linewidth = 0.2) +
   ylab("Site Code") + xlab(NULL) +
   scale_x_date(date_breaks = "1 month") +
   theme_classic() +
   theme(legend.position = "none",
-        axis.text.x = element_text(angle = 90),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 0.5),
         axis.text.y = element_text(size = 12),
         axis.title.y = element_text(size = 14))
 p.t1
@@ -296,29 +299,55 @@ df.p2 <- df2 %>% dplyr::select(unique_ind_id, code.new, time_point, wfhz, wastin
   #Dropping rows without data
   filter(!is.na(wfhz) | !is.na(MUAC.cat))
 
-p2.wfh.prop <- df.p2 %>% filter(!is.na(wasting.cat)) %>%
+df.p2.wfh.prop <- df.p2 %>% filter(!is.na(wasting.cat)) %>%
   group_by(time_point, wasting.cat) %>%
   summarize(n = n()) %>% mutate(prop = n/sum(n)) %>%
+  group_by(time_point) %>% mutate(total = sum(n), mam_sam = sum(n[wasting.cat != "normal"]), prop.mam_sam = mam_sam/total) %>%
+  filter(wasting.cat != "normal") %>%
+  #Adding error bars
+  rowwise() %>% mutate(Prev.CI.lower = f.CI_calc_lower(mam_sam, total)) %>% mutate(Prev.CI.upper = f.CI_calc_upper(mam_sam, total))
+
+# Plotting ###########################################################################################
+
+#Acute Malnutrition (MAM/SAM)
+p2.wfh.prop <- df.p2.wfh.prop %>%
   ggplot(aes(x = time_point, y = prop, fill = wasting.cat)) +
-  geom_bar(position = "stack", stat = "identity") +
   geom_vline(xintercept = c(2, 9), color = "orange", linetype = "dashed") +
-  scale_fill_viridis_d(option = "mako", name = "Acute Malnutrition", end = 0.95, direction = -1) +
+  geom_bar(position = "stack", stat = "identity") +
+  geom_point(data = df.p2.wfh.prop %>% group_by(time_point) %>% mutate(row = row_number()) %>% filter(row == 1),
+             aes(x = time_point, y = prop.mam_sam),
+             color = "grey50",
+             size = 0.8) +
+  #Adding error bars
+  geom_errorbar(data = df.p2.wfh.prop %>% group_by(time_point) %>% mutate(row = row_number()) %>% filter(row == 1),
+                aes(ymin=Prev.CI.lower, ymax=Prev.CI.upper),
+                linewidth = 0.3,     # Thinner lines
+                width = 0.06,        # Thinner horizontals on the Ts
+                color = "grey50",
+                position="identity") +
+  scale_fill_viridis_d(option = "mako", name = "Acute Malnutrition", 
+                       end = 0.8, begin = 0.2, direction = -1) +
   ylab("Proportion of children") + xlab(NULL) + 
   theme_bw() +
   theme(legend.position = "right",
         panel.grid = element_blank(),
         strip.background = element_rect(fill = "white"),
-        axis.text.x = element_text(angle = 90, hjust = 0.5, vjust = 0.5))
+        axis.text.x = element_text(angle = 90, hjust = 0.5, vjust = 0.5)) +
+  #Removing the gray point from the fill legend
+  guides(fill = guide_legend(override.aes = list(shape = NA)))
 p2.wfh.prop
 
 
 # viridis_pal(option = "mako")(15)
 
-p2.wfh.z <- df.p2 %>% filter(!is.na(wfhz)) %>%
+#HFW z scores
+p2.wfh.z <- df.p2 %>% filter(!is.na(wfhz)) %>% filter(abs(wfhz) < 5) %>%
   ggplot(aes(x = time_point, y = wfhz)) +
   geom_vline(xintercept = c(2, 9), color = "orange", linetype = "dashed") +
-  geom_jitter(alpha = 0.2, color = "#36A3ABFF", width = 0.2) +
+  geom_jitter(alpha = 0.1, color = "#3E5095FF", width = 0.2) +
   geom_boxplot(outliers = FALSE, fill = NA, color = "#28192FFF") +
+  geom_hline(yintercept = c(-2, -3), color = "grey50") +
+  scale_y_continuous(breaks = c(-5:5)) +
   ylab("Height for Weight z-score") + xlab(NULL) +
   theme_bw() +
   theme(legend.position = "right",
@@ -328,12 +357,14 @@ p2.wfh.z <- df.p2 %>% filter(!is.na(wfhz)) %>%
 p2.wfh.z
 
 
+#MUAC
 p2.PB <- df.p2 %>% filter(!is.na(PB)) %>%
   ggplot(aes(x = time_point, y = PB)) +
   geom_vline(xintercept = c(2, 9), color = "orange", linetype = "dashed") +
-  geom_jitter(alpha = 0.2, color = "#8AD9B1FF", width = 0.2, height = 0.1) +
+  geom_jitter(alpha = 0.1, color = "#3E5095FF", width = 0.2, height = 0.1) +
   geom_boxplot(outliers = FALSE, fill = NA, color = "#28192FFF") +
-  ylab("MUAC (cm)") + xlab(NULL) +
+  geom_hline(yintercept = c(12.5, 11.5), color = "grey50") +
+  ylab("Mid-Upper Arm Circumference (MUAC) (cm)") + xlab(NULL) +
   theme_bw() +
   theme(legend.position = "right",
         panel.grid = element_blank(),
